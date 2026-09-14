@@ -49,19 +49,25 @@ export function spanColor(type: SpanType): string {
 }
 
 /**
- * F-020: tool spans named "compress" whose attributes carry the
- * opencode-dcp marker are projected to the dedicated COMPRESSION type.
- * A bare compress tool that *isn't* DCP stays TOOL_CALL — so other
- * plugins reusing the name aren't accidentally retyped.
+ * F-020/F-021: tool spans named "compress" whose payload carries the
+ * opencode-dcp contract (topic + content blocks with startId/endId) are
+ * projected to the dedicated COMPRESSION type. The transform requires the
+ * span — payload shape is the real contract; `attributes` carry only
+ * `ai.toolCall.name`, so a marker gate there silently fails on real data.
  */
 export function spanTypeFromRaw(
   spanType: string | null | undefined,
-  span?: { name?: string | null; attributes?: string | null },
+  span?: { name?: string | null; input_payload?: string | null },
 ): SpanType {
-  if (span && typeof span.name === "string" && span.name === "compress") {
-    if (typeof span.attributes === "string" && span.attributes.includes("opencode-dcp")) {
-      return "COMPRESSION";
-    }
+  if (
+    span &&
+    typeof span.name === "string" &&
+    span.name === "compress" &&
+    typeof span.input_payload === "string" &&
+    span.input_payload.includes("\"content\":") &&
+    /"(startId|endId)"/.test(span.input_payload)
+  ) {
+    return "COMPRESSION";
   }
   switch (spanType) {
     case "TRACE": return "TRACE";

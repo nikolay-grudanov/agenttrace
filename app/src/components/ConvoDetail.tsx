@@ -11,6 +11,7 @@ import { buildConvoEvents } from "./convo-events";
 import { useWorkshopEvent } from "../hooks/use-workshop-ws";
 import { useConversationDetail } from "../hooks/use-runs";
 import { useConvoStatistics } from "../hooks/use-convo-statistics";
+import { useConvoCompressions } from "../hooks/use-convo-compressions";
 import { StatsTable, StatsRow, StatsLabel, StatsValue, StatsCaption } from "./StatsTable";
 
 /**
@@ -166,12 +167,161 @@ function ConvoStatsPanel({ convoId }: { convoId: string }) {
   );
 }
 
+/**
+ * F-021: opencode-dcp compression feed — aggregated stats plus the numbered
+ * list of every compression in the conversation (topics, token deltas, and
+ * what the agent kept in each summary). Hidden entirely when the convo has
+ * no compressions. Token deltas come from DCP's own chat notifications and
+ * are exact; entries without a captured notification show the topic and
+ * summaries but no numbers.
+ */
+function DcpCompressionsPanel({ convoId }: { convoId: string }) {
+  const q = useConvoCompressions(convoId);
+  const [expanded, setExpanded] = useState(false);
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
+
+  if (q.isLoading) return null;
+  if (q.isError || !q.data) {
+    return (
+      <div className="text-[11px] font-mono px-3 py-2 rounded" style={{ background: "rgba(204,102,102,0.06)", color: C.red }}>
+        Failed to load compression report: {q.error instanceof Error ? q.error.message : "unknown"}
+      </div>
+    );
+  }
+  const d = q.data;
+  if (d.total === 0) return null;
+
+  const TONE = "#5fbfb0";
+  const t = d.totals;
+  const hasDeltas = t.removed_tokens > 0 || t.summary_tokens > 0;
+
+  return (
+    <div className="rounded-lg" style={{ background: "rgba(255,255,255,0.025)", border: `1px solid ${C.border}` }}>
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 transition-colors hover:bg-white/[0.03]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[9px] font-medium uppercase tracking-wide px-1.5 rounded" style={{ background: `${TONE}1a`, color: TONE, lineHeight: "16px" }}>
+            DCP
+          </span>
+          <span className="text-[11px] font-mono" style={{ color: C.fg2 }}>
+            {d.total} compression{d.total !== 1 ? "s" : ""}
+          </span>
+          {hasDeltas && (
+            <span className="text-[11px] font-mono" style={{ color: C.fg1 }}>
+              · −{t.removed_tokens.toLocaleString()} removed · +{t.summary_tokens.toLocaleString()} summary
+            </span>
+          )}
+          {t.net_tokens > 0 && (
+            <span className="text-[11px] font-mono" style={{ color: TONE }}>
+              · net −{t.net_tokens.toLocaleString()} tok
+            </span>
+          )}
+        </div>
+        <span style={{ display: "inline-flex", transform: expanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 120ms" }}>
+          <ChevronDown size={14} />
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 space-y-2">
+          {hasDeltas && (
+            <StatsTable>
+              <tbody>
+                <StatsRow>
+                  <StatsLabel>tokens removed</StatsLabel>
+                  <StatsValue>−{t.removed_tokens.toLocaleString()}</StatsValue>
+                </StatsRow>
+                <StatsRow>
+                  <StatsLabel>tokens in summaries</StatsLabel>
+                  <StatsValue>+{t.summary_tokens.toLocaleString()}</StatsValue>
+                </StatsRow>
+                <StatsRow>
+                  <StatsLabel>net context saved</StatsLabel>
+                  <StatsValue color={TONE}>−{t.net_tokens.toLocaleString()}</StatsValue>
+                </StatsRow>
+                <StatsRow>
+                  <StatsLabel>compressed</StatsLabel>
+                  <StatsValue>
+                    {t.messages.toLocaleString()} message{t.messages === 1 ? "" : "s"}
+                    {t.tools > 0 ? ` · ${t.tools.toLocaleString()} tool${t.tools === 1 ? "" : "s"}` : ""}
+                  </StatsValue>
+                </StatsRow>
+                <StatsRow last>
+                  <td className="py-[5px] text-[10px] leading-snug" style={{ color: C.fg0 }} colSpan={2}>
+                    Deltas parsed from DCP chat notifications — exact when captured.
+                  </td>
+                </StatsRow>
+              </tbody>
+            </StatsTable>
+          )}
+
+          {/* The feed: every compression, numbered like DCP's own #N */}
+          <div className="space-y-1">
+            {d.compressions.map(c => {
+              const open = openIdx === c.index;
+              return (
+                <div key={c.span_id} className="rounded" style={{ border: `1px solid ${open ? `${TONE}44` : C.border}`, background: open ? `${TONE}08` : "rgba(255,255,255,0.015)" }}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenIdx(open ? null : c.index)}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-white/[0.03]"
+                  >
+                    <span className="text-[10px] font-mono font-medium shrink-0" style={{ color: TONE }}>#{c.index}</span>
+                    <span className="text-[11px] font-mono truncate" style={{ color: C.fg3 }}>
+                      {c.topic ?? "(no topic)"}
+                    </span>
+                    <span className="ml-auto flex items-center gap-2 shrink-0">
+                      {c.removed_tokens != null && (
+                        <span className="text-[10px] font-mono" style={{ color: C.fg0 }}>
+                          −{c.removed_tokens.toLocaleString()} / +{(c.summary_tokens ?? 0).toLocaleString()}
+                        </span>
+                      )}
+                      {c.messages_compressed != null && (
+                        <span className="text-[10px] font-mono" style={{ color: C.fg0 }}>
+                          {c.messages_compressed} msg{c.tools_compressed != null ? ` +${c.tools_compressed} tools` : ""}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-mono" style={{ color: C.fg0 }}>{ago(c.started_at)}</span>
+                      <ChevronDown size={12} style={{ transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 120ms" }} />
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="px-2.5 pb-2 space-y-1.5">
+                      {c.blocks.map((b, i) => (
+                        <div key={`${c.span_id}-b${i}`}>
+                          {(b.start_id || b.end_id) && (
+                            <div className="text-[9px] font-mono mb-0.5" style={{ color: C.fg0 }}>
+                              {b.start_id ?? "?"} → {b.end_id ?? "?"}
+                            </div>
+                          )}
+                          <pre className="text-[11px] font-mono leading-relaxed whitespace-pre-wrap break-words" style={{ color: C.fg2 }}>
+                            {b.summary || "(empty summary)"}
+                          </pre>
+                        </div>
+                      ))}
+                      <div className="text-[9px] font-mono" style={{ color: C.fg0 }}>
+                        run {c.run_id.slice(0, 8)}… · {fmt(c.duration_ms)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConversationHeader({ runCount }: { runCount: number }) {
   return (
     <div className="text-[11px] font-mono inline-flex items-center gap-1.5" style={{ color: C.fg1 }}>
       <span>conversation</span>
-      <span className="relative group inline-flex items-center">
-        <HelpCircle size={13} style={{ color: C.fg0, cursor: "help" }} />
+      <span className="relative group inline-flex items-center">        <HelpCircle size={13} style={{ color: C.fg0, cursor: "help" }} />
         <div className="absolute left-0 top-full mt-2 z-50 hidden group-hover:block">
           <div className="rounded-lg px-3 py-2 text-[11px] leading-relaxed whitespace-nowrap shadow-xl"
             style={{ background: C.elevated, border: `1px solid ${C.borderLight}`, color: C.fg3 }}>
@@ -262,6 +412,10 @@ export function ConvoDetail({ convoId, onOpenTurn }: { convoId: string; onOpenTu
       {/* F-012: cross-run convo statistics — collapsible panel below the header. */}
       <div className="flex-shrink-0 px-4 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
         <ConvoStatsPanel convoId={convoId} />
+        {/* F-021: opencode-dcp compression feed (stats + numbered entries). */}
+        <div className="mt-2">
+          <DcpCompressionsPanel convoId={convoId} />
+        </div>
       </div>
 
       {/* Event stream */}

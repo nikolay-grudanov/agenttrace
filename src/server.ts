@@ -8,7 +8,7 @@ import { randomUUID } from "crypto";
 import { normalizeOtelId } from "./ids";
 import { parseOtlpRequest } from "./parse";
 import { decodeOtlpProtobuf } from "./otlp-protobuf";
-import { upsertRun, insertSpan, upsertEventSpan, findRunByEventId, adoptRunByEventId, getRuns, getRunWithSpans, getRunsByConvoId, getConvoStatistics, clearAll, upsertLiveEvent, getLiveEvents, cacheSavedRun, getCachedRun, deleteCachedRun, deleteRun, getSpanMeta, getSpanById, getSpanPayloadColumn, getSpanContext, getMostRecentlyTouchedRun, getRunById, getRunOutline, listSpansFiltered, searchRun, searchSpans, computeFacets, tailLiveEvents, listSavedEvents, getSavedEvent, upsertSavedEvent, patchSavedEvent, deleteSavedEvent, listSavedFolders, ensureSavedFolder, deleteSavedFolder, queryTraces, type SavedEventRow } from "./db";
+import { upsertRun, insertSpan, upsertEventSpan, findRunByEventId, adoptRunByEventId, getRuns, getRunWithSpans, getRunsByConvoId, getConvoStatistics, getConvoCompressions, clearAll, upsertLiveEvent, getLiveEvents, cacheSavedRun, getCachedRun, deleteCachedRun, deleteRun, getSpanMeta, getSpanById, getSpanPayloadColumn, getSpanContext, getMostRecentlyTouchedRun, getRunById, getRunOutline, listSpansFiltered, searchRun, searchSpans, computeFacets, tailLiveEvents, listSavedEvents, getSavedEvent, upsertSavedEvent, patchSavedEvent, deleteSavedEvent, listSavedFolders, ensureSavedFolder, deleteSavedFolder, queryTraces, type SavedEventRow } from "./db";
 import { sliceSpanPayload } from "./payload-slice";
 import { detectSubAgents } from "./agents";
 import { applyProviderOptions, detectProvider, getProviderBaseURL, getProviderHeaders } from "./provider-options";
@@ -1084,6 +1084,8 @@ export async function createServer(port: number) {
   app.get("/api/convo/:convoId", (req, res) => res.json(getRunsByConvoId(req.params.convoId)));
   // F-012: cross-run convo statistics (totals + per-model + per-run rollup).
   app.get("/api/convo/:convoId/statistics", (req, res) => res.json(getConvoStatistics(req.params.convoId)));
+  // F-021: opencode-dcp compression report (count + token deltas + feed).
+  app.get("/api/convo/:convoId/compressions", (req, res) => res.json(getConvoCompressions(req.params.convoId)));
   // Regex route so run IDs containing ':', '/', or '.' aren't parsed as Express path-param separators
   app.get(/^\/api\/runs\/detail\/(.+)$/, (req, res) => {
     const id = (req.params as unknown as string[])[0];

@@ -26,6 +26,61 @@ Handoff for a future session that picks this up: `HANDOFF-NEXT-SESSION.md`.
 
 ## Active Features
 
+### F-021 — DCP compression analytics: convo stats, feed, full summaries
+
+**Context:** F-020 surfaced individual `compress` tool calls, but Kolya asked for conversation-level visibility: how many compressions happened, what the agent kept in each, and the token economics. The exact token deltas live in DCP's chat notifications — `Compression #N -X removed, +Y summary · M messages and K tools compressed` — which DCP injects into the NEXT LLM request's input messages, so they are parseable from captured LLM spans. Also fixed en route: F-020's detection gate looked for an "opencode-dcp" marker in `attributes`, but the plugin stamps only `ai.toolCall.name` there — the banner silently never rendered on real data. Detection is now by payload shape (`topic` + `content[]` with `startId`/`endId`).
+
+**Result:**
+- `src/agents.ts` — `detectCompressions(spans)` (+ `Compression`/`CompressionBlock` types): chronological compress calls with topic/blocks; scans LLM span `input_payload`s for the notification regex and joins exact `removed_tokens`/`summary_tokens`/messages/tools by DCP's sequential `#N`. `SpanRow` grew optional `input_payload`/`output_payload`/`run_id`.
+- `src/db.ts` — `getConvoCompressions(convoId)`: loads all convo spans with payloads, runs detection, aggregates totals (`removed_tokens`, `summary_tokens`, `net_tokens`, messages, tools).
+- `src/server.ts` — `GET /api/convo/:convoId/compressions`.
+- `app/src/api/convo-compressions.ts` + `app/src/hooks/use-convo-compressions.ts` — typed client (mirrors the F-012 statistics pattern).
+- `app/src/components/ConvoDetail.tsx` — `DcpCompressionsPanel` under Convo Stats: teal chip header ("N compressions · −X removed · +Y summary · net −Z tok"), totals table, and the numbered feed (#1, #2, … with topic, per-entry deltas, messages/tools, age; click expands the full block summaries with run/duration footer). Hidden when the convo has no compressions. Visible in both the convo page and RunDetail's Convo tab.
+- `app/src/utils/dcp.ts` (new) — shared client parser `parseDcpCompression()` (payload-shape gate, no attributes marker).
+- `app/src/components/DcpCompressionBlock.tsx` (new) — shared teal banner used by `ToolCallPill` and `SpanDetail`; per-block summaries truncate at 220 chars with a "See full summary (N chars)" toggle (item 3). Local F-020 parser copies deleted from both components.
+- `app/src/utils/span-colors.ts` — `spanTypeFromRaw` gate switched to payload shape (the F-020 attributes-marker bug fix).
+
+**Verified:** `tests/compressions.test.ts` — 6 new tests (notification join by #N, non-DCP payload ignored, chronological indices, missing-notification degradation, DB aggregation scoped to convo, empty convo). Full suite 108/108; root tsc clean; lint 0 errors; `build:ui` ok. Ran `getConvoCompressions` against the live DB out-of-process on convo `ses_f75db3742…`: 2 compressions, totals −214 removed / +120 summary / net −94, 6 messages.
+
+**Known issue (needs Kolya's word):** the daemon's `bun --watch` is wedged in a mixed module state (new route registered, old `db.ts` import cached → `ReferenceError: getConvoCompressions is not defined` on the new route only; all other routes fine; touches don't recover it). A daemon restart will pick everything up. Do NOT restart without Kolya's say-so (fork rule).
+
+**Plugin-repo impact:** NONE.
+
+**Todos:**
+- [x] detectCompressions + notification parsing (src/agents.ts)
+- [x] getConvoCompressions + /api/convo/:id/compressions
+- [x] ConvoDetail panel: totals + numbered feed with topics
+- [x] Shared DcpCompressionBlock with "See full summary" in ToolCallPill/SpanDetail
+- [x] F-020 gate bugfix (payload shape, not attributes marker)
+- [x] Tests (6) + tsc + lint + build:ui + out-of-process real-DB run
+- [ ] Live endpoint check after daemon restart (awaits Kolya's word on restart)
+- [ ] Commit + push (awaits Kolya's word)
+
+### F-020 — Dedicated COMPRESSION span type for opencode-dcp
+
+**Context:** With the opencode-dcp plugin ([opencode-dynamic-context-pruning](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning)) installed, the model invokes a tool named `compress` to prune redundant context. Before F-020 these compress calls landed as generic `TOOL_CALL` spans with teal-on-teal pill colour, no badge, and no readable summary — operators had to eyeball raw JSON. Per-run conversation view also couldn't tell at a glance how many compressions happened and what the agent kept.
+
+**Result:**
+- `app/src/utils/types.ts` — extended `SpanType` union with `COMPRESSION`.
+- `app/src/utils/span-colors.ts` — `SPAN_TYPE_COLORS.COMPRESSION = "#5fbfb0"` (teal, distinct from `SUB_AGENT_ROOT` gold) and badge label `COMP`. `spanTypeFromRaw()` now takes an optional span; when `name === "compress"` and `attributes` contain the opencode-dcp marker, the projection returns `COMPRESSION` (a bare compress tool that *isn't* DCP stays `TOOL_CALL`, so other plugins reusing the name aren't retyped by accident).
+- `app/src/components/SpanTree.tsx`, `app/src/components/FlameTimeline.tsx` — pass the full span to `spanTypeFromRaw` so the projection sees the name.
+- `app/src/utils/colors.ts` — `spanColor(name, colorMap)` pins `compress` to teal so all compression pills line up regardless of registration order.
+- `app/src/components/ToolCallPill.tsx` — when a tool pill opens, a teal "DCP compression" banner is rendered above the raw Input/Output panels listing the topic, number of blocks replaced, and each block's `startId → endId` + `summary` (range mode) or "block ref only" hint (message mode). Uses the opencode-dcp wire format: `input_payload = { topic, content: [{ startId, endId, summary }] }`.
+- `app/src/components/SpanDetail.tsx` — equivalent dedicated block for the right-rail SpanDetail (rendered when the user clicks a compress span in the Span Tree / Session Tree).
+
+**Verified:** root `bun x tsc --noEmit` clean; `bun run lint` 0 errors (3 pre-existing warnings); `bun test tests/` 102/102; `bun run build:ui` ok. `spanTypeFromRaw` projection unit-validated via `bun -e` script: DCP compress → COMPRESSION with teal `#5fbfb0` and label `COMP`; bare compress without dcp marker → stays `TOOL_CALL`; LLM tolerance preserved.
+
+**Plugin-repo impact:** NONE.
+
+**Todos:**
+- [x] Plan F-020 (this entry)
+- [x] SpanType union + projection + colour palette + ToolCallPill banner
+- [x] tsc + lint + tests + build:ui
+- [ ] Live smoke in IAB on run b8f2c50c (visual confirmation deferred — IAB screenshot surface timed out again)
+- [ ] Commit + push (awaits Kolya's word)
+
+**Follow-up (not done):** convo-level statistics — number of compressions per conversation, total tokens pruned vs summarised, topics. Plumbing exists (`spanTypeFromRaw` + `agents.ts` `detectSubAgents` could grow a sibling `detectCompressions`), but the UI and aggregation endpoints weren't built in this slice.
+
 ### F-019 — Bugfix: filter-only search always returned 0 results
 
 **Context:** After F-017's multi-filter SearchPage, any search without free-text (agent=f014-test, model=X, has-errors, …) showed "0 spans across 0 runs". `searchSpans()` short-circuited to an empty result whenever `sanitizeFtsQuery(q)` produced no MATCH tokens — a leftover guard from F-008 when `q` was the only input — silently ignoring all active filters. Facets listed the agents and the runs existed, yet every filter-only query came back empty.

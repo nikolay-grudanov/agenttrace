@@ -3,6 +3,7 @@ import { Chevron, Check, Spinner, AlertCircle } from "./Icons";
 import { C, spanColor } from "../utils/colors";
 import { argsPreview, fmt, trunc, tryJson } from "../utils/helpers";
 import { getNormalizedTool, type Span } from "../utils/types";
+import { DcpCompressionBlock } from "./DcpCompressionBlock";
 
 function approxTokens(s: string | null | undefined): string | null {
   if (!s || s.length < 20) return null;
@@ -90,51 +91,9 @@ export function ToolCallPill({ span, colorMap }: { span: Span; colorMap: Map<str
               <pre className="text-[11px] font-mono leading-relaxed whitespace-pre-wrap break-words" style={{ color: C.red }}>{trunc(tryJson(span.output_payload), 300)}</pre>
             </div>
           )}
-          {/* F-020: when this is an opencode-dcp compress call, surface the
-              topic + per-block summaries above the raw payload panes so
-              operators don't have to eyeball JSON. Detection uses the
-              payload shape — the attributes "opencode-dcp" marker would
-              silently fail because the plugin stamps only ai.toolCall.name. */}
-          {span.name === "compress" && span.input_payload && (() => {
-            let parsed: unknown;
-            try { parsed = JSON.parse(span.input_payload); } catch { parsed = null; }
-            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-            const obj = parsed as Record<string, unknown>;
-            const content = Array.isArray(obj.content) ? obj.content : [];
-            if (content.length === 0) return null;
-            const blocks: Array<Record<string, unknown>> = [];
-            for (const raw of content) {
-              if (!raw || typeof raw !== "object") continue;
-              const b = raw as Record<string, unknown>;
-              if (typeof b.startId !== "string" && typeof b.endId !== "string") continue;
-              blocks.push(b);
-            }
-            if (blocks.length === 0) return null;
-            const topic = typeof obj.topic === "string" ? obj.topic : null;
-            const TONE = "#5fbfb0";
-            return (
-              <div className="px-3 py-2" style={{ background: `${TONE}0d`, borderBottom: `1px solid ${TONE}33` }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[9px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: TONE, background: `${TONE}22` }}>DCP compression</span>
-                  {topic && <span className="text-[11px] font-mono" style={{ color: C.fg2 }}>{topic}</span>}
-                  <span className="text-[10px] font-mono" style={{ color: C.fg0 }}>{blocks.length} block{blocks.length !== 1 ? "s" : ""}</span>
-                </div>
-                <div className="space-y-1">
-                  {blocks.map((b, i) => {
-                    const s = typeof b.startId === "string" ? b.startId : "—";
-                    const e = typeof b.endId === "string" ? b.endId : "—";
-                    const sum = typeof b.summary === "string" ? b.summary : "";
-                    return (
-                      <div key={i} className="text-[11px] font-mono leading-relaxed">
-                        <span style={{ color: TONE }}>{s} → {e}</span>
-                        {sum ? <span style={{ color: C.fg1 }}> · {sum}</span> : <span style={{ color: C.fg0 }}> · block ref only</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
+          {/* F-020/F-021: DCP compression summary (shared block with
+              "See full summary" toggle) */}
+          <DcpCompressionBlock span={span} />
           {/* Split panes */}
           <div className="flex flex-col md:flex-row" style={{ maxHeight: 400 }}>
             {span.input_payload && (

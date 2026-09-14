@@ -32,6 +32,11 @@ interface SpanRow {
   output_tokens: number | null;
   /** OTLP attributes JSON blob; present on client-side Span[] rows. */
   attributes?: string | null;
+  /** Raw JSON payloads; selected by F-021 compression detection. */
+  input_payload?: string | null;
+  output_payload?: string | null;
+  /** Owning run; present on DB selects joined per-run. */
+  run_id?: string;
 }
 
 export interface SubAgent {
@@ -179,4 +184,149 @@ export function detectSubAgents(spans: SpanRow[]): SubAgent[] {
   }
 
   return agents;
+}
+
+// ---------------------------------------------------------------------------
+// F-021: opencode-dcp compression detection.
+//
+// opencode-dcp prunes context through a `compress` tool call:
+//   input_payload  = { "topic": string,
+//                      "content": [{ "startId": "m0001", "endId": "m0003",
+//                                    "summary": "…" }, …] }
+//   output_payload = "Compressed N messages into [Compressed conversation section]."
+// The plugin then injects a chat notification — visible in the NEXT LLM
+// request's input messages — of the form:
+//   "Compression #1 -214 removed, +120 summary · 3 messages and 2 tools compressed"
+// which is the only place exact token deltas live. We scan LLM spans for
+// those notifications and join them to compress calls by DCP's sequential #N.
+// ---------------------------------------------------------------------------
+
+export interface CompressionBlock {
+  start_id: string | null;
+  end_id: string | null;
+  summary: string;
+}
+
+export interface Compression {
+  span_id: string;
+  run_id: string;
+  /** 1-based, matches DCP's own "Compression #N" numbering (by start time). */
+  index: number;
+  topic: string | null;
+  started_at: number;
+  duration_ms: number;
+  blocks: CompressionBlock[];
+  messages_compressed: number | null;
+  tools_compressed: number | null;
+  /** Tokens removed from context (from the DCP notification, exact). */
+  removed_tokens: number | null;
+  /** Tokens added by the summary (from the DCP notification, exact). */
+  summary_tokens: number | null;
+}
+
+const DCP_NOTIFICATION_RE =
+  /Compression\s*#(\d+)\s+-(\d+)\s+removed,\s*\+(\d+)\s+summary(?:\s+[·∙|]\s+(\d+)\s+messages?\s+and\s+(\d+)\s+tools?\s+compressed)?/g;
+
+interface NotificationStats {
+  removed: number;
+  summary: number;
+  messages: number | null;
+  tools: number | null;
+}
+
+/** Scan every LLM span's input messages for "Compression #N …" notifications. */
+function collectCompressionNotifications(spans: SpanRow[]): Map<number, NotificationStats> {
+  const byIndex = new Map<number, NotificationStats>();
+  for (const span of spans) {
+    if (typeof span.input_payload !== "string" || !span.input_payload.includes("Compression #")) continue;
+    DCP_NOTIFICATION_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = DCP_NOTIFICATION_RE.exec(span.input_payload)) !== null) {
+      const idx = Number(m[1]);
+      const stats: NotificationStats = {
+        removed: Number(m[2]),
+        summary: Number(m[3]),
+        messages: m[4] != null ? Number(m[4]) : null,
+        tools: m[5] != null ? Number(m[5]) : null,
+      };
+      // Later occurrences (newer requests replay the notification) win.
+      byIndex.set(idx, stats);
+    }
+  }
+  return byIndex;
+}
+
+function parseCompressInput(
+  payload: string | null | undefined,
+): { topic: string | null; blocks: CompressionBlock[] } | null {
+  if (typeof payload !== "string") return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const obj = parsed as Record<string, unknown>;
+  const content = Array.isArray(obj.content) ? obj.content : [];
+  if (content.length === 0) return null;
+  const blocks: CompressionBlock[] = [];
+  for (const raw of content) {
+    if (!raw || typeof raw !== "object") continue;
+    const b = raw as Record<string, unknown>;
+    if (typeof b.startId !== "string" && typeof b.endId !== "string") continue;
+    blocks.push({
+      start_id: typeof b.startId === "string" ? b.startId : null,
+      end_id: typeof b.endId === "string" ? b.endId : null,
+      summary: typeof b.summary === "string" ? b.summary : "",
+    });
+  }
+  if (blocks.length === 0) return null;
+  return { topic: typeof obj.topic === "string" ? obj.topic : null, blocks };
+}
+
+/**
+ * Detect opencode-dcp compress calls across a span list (typically all spans
+ * of a conversation). Returns them in chronological order with DCP's own
+ * notification stats joined by sequential index.
+ */
+export function detectCompressions(spans: SpanRow[]): Compression[] {
+  const notifications = collectCompressionNotifications(spans);
+  const out: Compression[] = [];
+  for (const span of spans) {
+    if (span.name !== "compress") continue;
+    const parsed = parseCompressInput(span.input_payload);
+    if (!parsed) continue;
+    let messagesCompressed: number | null = null;
+    if (typeof span.output_payload === "string") {
+      const m = span.output_payload.match(/Compressed\s+(\d+)\s+messages/i);
+      if (m) messagesCompressed = Number(m[1]);
+    }
+    out.push({
+      span_id: span.id,
+      run_id: span.run_id ?? "",
+      index: 0, // assigned below once sorted
+      topic: parsed.topic,
+      started_at: span.start_time_ms,
+      duration_ms: span.duration_ms,
+      blocks: parsed.blocks,
+      messages_compressed: messagesCompressed,
+      tools_compressed: null,
+      removed_tokens: null,
+      summary_tokens: null,
+    });
+  }
+  out.sort((a, b) => a.started_at - b.started_at);
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i];
+    c.index = i + 1;
+    const n = notifications.get(c.index);
+    if (n) {
+      c.removed_tokens = n.removed;
+      c.summary_tokens = n.summary;
+      c.tools_compressed = n.tools;
+      if (n.messages != null) c.messages_compressed = n.messages;
+    }
+  }
+  return out;
 }

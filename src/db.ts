@@ -6,7 +6,7 @@ import path from "path";
 import os from "os";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { detectSubAgents } from "./agents";
+import { detectSubAgents, detectCompressions } from "./agents";
 import { normalizeStoredSpan } from "./spans/normalize";
 import type { NormalizedSpan } from "./spans/normalized";
 import * as schema from "./db/schema";
@@ -887,6 +887,68 @@ export function getConvoStatistics(convoId: string) {
       .map(([model, t]) => ({ model, in: t.in, out: t.out }))
       .sort((a, b) => (b.in + b.out) - (a.in + a.out)),
     runs: runsOut,
+  };
+}
+
+/**
+ * F-021: cross-run opencode-dcp compression report for a conversation.
+ * Loads every span (payloads included), runs `detectCompressions`, and
+ * aggregates totals: count, tokens removed vs added by summaries, messages
+ * and tools compressed. Token deltas come from DCP's own chat
+ * notifications, so they're exact — absent when the notification didn't
+ * make it into any captured LLM request.
+ */
+export function getConvoCompressions(convoId: string) {
+  const runs = getDrizzleDb()
+    .select({ id: schema.runs.id })
+    .from(schema.runs)
+    .where(eq(schema.runs.convo_id, convoId))
+    .all();
+
+  const empty = {
+    convo_id: convoId,
+    total: 0,
+    totals: { removed_tokens: 0, summary_tokens: 0, net_tokens: 0, messages: 0, tools: 0 },
+    compressions: [] as Array<ReturnType<typeof detectCompressions>[number]>,
+  };
+  if (runs.length === 0) return empty;
+
+  const spanRows = getDrizzleDb()
+    .select({
+      id: schema.spans.id,
+      run_id: schema.spans.run_id,
+      name: schema.spans.name,
+      span_type: schema.spans.span_type,
+      start_time_ms: schema.spans.start_time_ms,
+      duration_ms: schema.spans.duration_ms,
+      input_payload: schema.spans.input_payload,
+      output_payload: schema.spans.output_payload,
+    })
+    .from(schema.spans)
+    .where(inArray(schema.spans.run_id, runs.map(r => r.id)))
+    .all();
+
+  const compressions = detectCompressions(spanRows as unknown as Parameters<typeof detectCompressions>[0]);
+  if (compressions.length === 0) return empty;
+
+  let removed = 0, summary = 0, messages = 0, tools = 0;
+  for (const c of compressions) {
+    removed += c.removed_tokens ?? 0;
+    summary += c.summary_tokens ?? 0;
+    messages += c.messages_compressed ?? 0;
+    tools += c.tools_compressed ?? 0;
+  }
+  return {
+    convo_id: convoId,
+    total: compressions.length,
+    totals: {
+      removed_tokens: removed,
+      summary_tokens: summary,
+      net_tokens: removed - summary,
+      messages,
+      tools,
+    },
+    compressions,
   };
 }
 
