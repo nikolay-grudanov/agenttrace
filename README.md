@@ -2,7 +2,7 @@
   <img src="./docs/assets/workshop-hero.png" alt="Workshop: the local debugger your agent is missing." width="100%">
 </p>
 
-# Raindrop Workshop
+# Raindrop Workshop (Kolya fork)
 
 **The local debugger your agent is missing.** Watch your agent think locally,
 the moment it happens: every token, every tool call, every decision.
@@ -10,18 +10,54 @@ the moment it happens: every token, every tool call, every decision.
 Give Claude Code the power to read your traces, write evals against your
 codebase, and fix what's broken.
 
+This is Nikolai Grudanov's fork of [@raindrop-ai/workshop](https://github.com/raindrop-ai/workshop)
+(distributed here as `@grudanov-nikolay/opencode-workshop`). It ships the same
+daemon plus 14 additional features on top of upstream. See [Differences from
+upstream](#differences-from-upstream) below.
+
+> **Alpha notice:** `0.0.1` is the first public alpha. Expect rough edges.
+> File issues at <https://github.com/nikolay-grudanov/opencode-workshop/issues>.
+
 ## Install
 
-One command. This is all you need to install and run Workshop. There is
-nothing to clone and nothing to build.
+Pick **one** of the two methods below — they install the same daemon.
+
+### Option A — npm (Linux x64, Windows x64)
+
+```bash
+npm install -g @grudanov-nikolay/opencode-workshop
+raindrop workshop serve
+```
+
+No build tools required at runtime: the npm tarball contains pre-compiled
+Bun binaries (`binaries/raindrop-linux-x64`, `binaries/raindrop-windows-x64.exe`),
+and a tiny Node launcher (`bin/raindrop.js`) selects the right one for your
+platform.
+
+### Option B — upstream curl installer
+
+If you prefer the upstream binary path (works on macOS too):
 
 ```bash
 curl -fsSL https://raindrop.sh/install | bash
 ```
 
-> **Using an AI coding agent?** Tell it to run the command above. Do **not**
-> clone or build from source just to try Workshop; that path is only for
-> people developing Workshop itself.
+This installs the upstream `raindrop` CLI; you lose the 14 fork features
+listed below but gain macOS support.
+
+### Option C — build from source (developers only)
+
+Use this if you want to hack on Workshop itself or run on an unsupported
+platform.
+
+```bash
+git clone https://github.com/nikolay-grudanov/opencode-workshop.git
+cd opencode-workshop
+bun install
+bun run dev    # starts daemon on :5899 + Vite UI on :5900
+```
+
+Requires [Bun](https://bun.sh) ≥ 1.3.13.
 
 ## Instrument your agent
 
@@ -33,7 +69,9 @@ Open your coding agent of choice in your repository and run:
 
 This will instrument your agent with Raindrop tracing and open Workshop in your browser.
 
-That's it. Traces stream into the UI the moment your agent runs.
+If you're using OpenCode, install
+[`@grudanov-nikolay/opencode-workshop-plugin`](https://www.npmjs.com/package/@grudanov-nikolay/opencode-workshop-plugin)
+(separate package) and add it to your OpenCode config.
 
 ## What it does
 
@@ -55,6 +93,28 @@ That's it. Traces stream into the UI the moment your agent runs.
 - **Providers:** AWS Bedrock, Azure OpenAI, Vertex AI
 - **Coding agents:** Claude Code, Codex, Devin, Cursor, OpenCode
 
+## Differences from upstream
+
+This fork adds the following on top of `@raindrop-ai/workshop@0.0.17`:
+
+| | Feature | Where |
+|---|---|---|
+| F-006 | Sidepanel prompt chips (data-driven from sidepanel.json) | app/src |
+| F-008 | Full-text search UI + FTS5 storage layer for spans | src/db, app/src |
+| F-012 | Ruled-table stats panels under the header row | app/src |
+| F-014 | Filters: agent / user / git-context, with facets on /api/search | src/api |
+| F-015 | Data-driven sidepanel prompt chips with runtime override | app/src |
+| F-016 | OpenCode plugin FTS integration (event-spans indexed, MATCH sanitized) | depends on plugin |
+| F-017 | Local multi-filter search + sidebar cleanup | app/src |
+| F-018 | Globe-only LangSwitcher + flyout locale menu | app/src |
+| F-019 | Filter-only search (empty q now applies filters instead of returning 0) | src/api |
+| F-020 | Dedicated `compression` span type for OpenCode DCP | src/db |
+| F-021 | DCP compression analytics: convo stats + feed + summaries | src/db, app/src |
+
+Upstream is reachable at <https://github.com/raindrop-ai/workshop>. This fork
+is rebased against upstream `main` periodically; expect 3–5 fork-specific
+commits ahead of origin at any time.
+
 ## Configuration
 
 | Env var | Purpose | Default |
@@ -70,25 +130,15 @@ raindrop workshop          # start and open UI
 raindrop workshop setup    # write .env, then start and open
 raindrop workshop status   # check health
 raindrop workshop reset    # delete local DB after confirmation
-raindrop update            # update the binary
 ```
 
-## Build from source (contributors only)
-
-> You only need this if you're hacking on Workshop itself. **To use Workshop,
-> run the [install command](#install) above. You do not need to clone or build
-> from source.**
-
-```bash
-git clone https://github.com/raindrop-ai/workshop.git
-cd workshop
-bun install
-bun run dev
-```
-
-`bun run dev` starts the local Workshop daemon and Vite UI. Open
-`http://localhost:5899` after it starts.
+`raindrop update` is not available via the npm-install path because the npm
+package always carries the latest pre-compiled binary. To update, run
+`npm update -g @grudanov-nikolay/opencode-workshop`.
 
 ## License
 
-MIT.
+MIT. Dual copyright: (c) 2026 Invisible Tools, Inc. (dba Raindrop) for the
+upstream-derived code, (c) 2026 Nikolai Grudanov for the modifications.
+See [LICENSE](./LICENSE).
+

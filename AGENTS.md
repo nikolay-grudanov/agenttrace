@@ -105,3 +105,59 @@ fire them all at once before synthesizing an answer.
 When the user types `/graphify`, use the installed graphify skill or instructions
 before doing anything else. (This is the entry point for the high-priority
 research workflow above — the skill handles the graphify portion.)
+
+## Publishing (npm)
+
+The repo ships as `@grudanov-nikolay/opencode-workshop@<version>` on npm. The
+tarball contains `bin/raindrop.js` (a Node launcher) + `binaries/raindrop-*`
+(pre-compiled Bun binaries for linux-x64 and win32-x64). Source code, dev
+tooling, node_modules, and the Vite UI build artefacts are NOT in the tarball.
+
+### Pre-publish checklist
+
+- [ ] `package.json` `version` is bumped (and matches `__RAINDROP_VERSION__` baked into the binaries if you set `RAINDROP_VERSION=<version>` before `build:bun`).
+- [ ] `bin/raindrop.js workshop --help` prints help text (smoke test the launcher end-to-end on linux-x64).
+- [ ] `binaries/raindrop-linux-x64` and `binaries/raindrop-windows-x64.exe` are checked in and not stale.
+- [ ] `bun run build:bun:stage` rebuilds both binaries cleanly (or use `bun scripts/build-bun.ts --target=bun-linux-x64 --skip-ui` + same for windows).
+- [ ] `npm pack --dry-run` shows only `bin/`, `binaries/`, `package.json`, `README.md`, `AGENTS.md`, `LICENSE`.
+- [ ] Tag `v<version>` exists locally: `git tag -a v<version> -m "<message>"` (Kolya action; never auto-tag).
+- [ ] `npm whoami` returns the Kolya account (not a stray org admin). Re-login with `npm logout && npm login` if needed.
+
+### Publishing
+
+```bash
+# 1. Rebuild binaries with the canonical version string (no -local suffix).
+RAINDROP_VERSION=0.0.1 bun scripts/build-bun.ts --target=bun-linux-x64
+mv build/bun/raindrop-bun-linux-x64 binaries/raindrop-linux-x64
+RAINDROP_VERSION=0.0.1 bun scripts/build-bun.ts --target=bun-windows-x64
+mv build/bun/raindrop-bun-windows-x64.exe binaries/raindrop-windows-x64.exe
+
+# 2. Smoke-test.
+node bin/raindrop.js --version     # expect: 0.0.1
+node bin/raindrop.js workshop --help | head -5
+
+# 3. Stage and inspect the tarball.
+npm pack --dry-run
+
+# 4. Commit (Kolya command).
+git add package.json README.md AGENTS.md LICENSE bin/ binaries/ .github/workflows/ci.yml
+git commit -m "chore(F-022): release <version>"
+
+# 5. Push (Kolya command).
+git push origin main
+git push origin v<version>
+
+# 6. Publish (Kolya command — never run npm publish unattended).
+npm publish --access public --tag latest
+
+# 7. Create GitHub Release (Kolya command).
+gh release create v<version> --notes-file - <<'NOTES'
+<changelog>
+NOTES
+```
+
+### Post-publish
+
+- Verify with `npm view @grudanov-nikolay/opencode-workshop version`.
+- Verify the launcher end-to-end on a clean machine (or fresh shell): `npm i -g @grudanov-nikolay/opencode-workshop && raindrop workshop serve`.
+- Move the in-flight Feature (e.g. `F-022`) from `## Active Features` to `## Closed Features` in `ai-docs/PLAN.md` with `Closed <date>`.

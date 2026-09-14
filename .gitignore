@@ -83,6 +83,7 @@ app/playwright-report/
 .claude/
 .codex/
 .omo/
+.zcode/
 
 # Local IDE wirings dropped by `raindrop install --local` during dev smoke
 # tests against the workshop itself. Real customer projects DO check
