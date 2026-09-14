@@ -22,6 +22,9 @@ export const SPAN_TYPE_COLORS: Record<SpanType, string> = {
   RETRIEVER: "#4FCAE3",
   EMBEDDING: "#8BC34A",
   SUB_AGENT_ROOT: "#d4a857",
+  // F-020: teal — distinct from agent-root gold so "context management"
+  // doesn't visually compete with "delegated sub-agent".
+  COMPRESSION: "#5fbfb0",
 };
 
 /**
@@ -38,6 +41,7 @@ export const SPAN_TYPE_LABELS: Record<SpanType, string> = {
   RETRIEVER: "RETR",
   EMBEDDING: "EMBED",
   SUB_AGENT_ROOT: "AGENT",
+  COMPRESSION: "COMP",
 };
 
 export function spanColor(type: SpanType): string {
@@ -45,13 +49,20 @@ export function spanColor(type: SpanType): string {
 }
 
 /**
- * Project a raw `span.span_type` (string from the API, possibly null) into
- * the display `SpanType` union. Any value outside the union collapses to
- * INTERNAL. The `includes("LLM")` branch preserves the historical
- * tolerance for variants like `"LLM"` / `"llm_generation"` that some SDKs
- * emit before normalising to upper-case.
+ * F-020: tool spans named "compress" whose attributes carry the
+ * opencode-dcp marker are projected to the dedicated COMPRESSION type.
+ * A bare compress tool that *isn't* DCP stays TOOL_CALL — so other
+ * plugins reusing the name aren't accidentally retyped.
  */
-export function spanTypeFromRaw(spanType: string | null | undefined): SpanType {
+export function spanTypeFromRaw(
+  spanType: string | null | undefined,
+  span?: { name?: string | null; attributes?: string | null },
+): SpanType {
+  if (span && typeof span.name === "string" && span.name === "compress") {
+    if (typeof span.attributes === "string" && span.attributes.includes("opencode-dcp")) {
+      return "COMPRESSION";
+    }
+  }
   switch (spanType) {
     case "TRACE": return "TRACE";
     case "TOOL_CALL": return "TOOL_CALL";

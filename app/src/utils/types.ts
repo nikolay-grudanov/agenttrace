@@ -26,7 +26,8 @@ export type SpanType =
   | "CHAIN"
   | "RETRIEVER"
   | "EMBEDDING"
-  | "SUB_AGENT_ROOT";
+  | "SUB_AGENT_ROOT"
+  | "COMPRESSION";
 
 export interface ReplayMetadata {
   replay: {

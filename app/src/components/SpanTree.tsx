@@ -46,7 +46,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function typeInfo(span: Span): { color: string; label: string } {
-  const t = spanTypeFromRaw(span.span_type);
+  const t = spanTypeFromRaw(span.span_type, span);
   return { color: SPAN_TYPE_COLORS[t], label: SPAN_TYPE_LABELS[t] };
 }
 

@@ -31,6 +31,10 @@ const SPAN_COLORS = [
 ];
 
 export function spanColor(name: string, map: Map<string, string>): string {
+  // F-020: opencode-dcp's compress tool gets a fixed teal so all compression
+  // pills line up regardless of registration order. Other tool names rotate
+  // through the palette as before.
+  if (name === "compress") return "#5fbfb0";
   if (!map.has(name)) {
     map.set(name, SPAN_COLORS[map.size % SPAN_COLORS.length]);
   }

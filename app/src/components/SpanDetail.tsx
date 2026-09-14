@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { C } from "../utils/colors";
 import { fmt, tryJson, detectProvider } from "../utils/helpers";
+import { spanTypeFromRaw } from "../utils/span-colors";
 import type { Span } from "../utils/types";
 import { Chevron } from "./Icons";
 import { JsonView } from "./JsonView";
@@ -12,13 +13,12 @@ const TYPE_LABEL = {
   SUB_AGENT_ROOT: { color: "#d4a857", label: "AGENT" },
   LLM_GENERATION: { color: "#5a8ab0", label: "LLM" },
   INTERNAL: { color: C.fg0, label: "SPAN" },
+  COMPRESSION: { color: "#5fbfb0", label: "COMP" },
 } as const;
 
 function typeInfo(span: Span) {
-  if (span.span_type === "TRACE") return TYPE_LABEL.TRACE;
-  if (span.span_type === "TOOL_CALL") return TYPE_LABEL.TOOL_CALL;
-  if (span.span_type?.includes("LLM")) return TYPE_LABEL.LLM_GENERATION;
-  return TYPE_LABEL.INTERNAL;
+  const t = spanTypeFromRaw(span.span_type, span);
+  return TYPE_LABEL[t];
 }
 
 function CollapsibleSection({ title, preview, data, maxExpand = 3 }: { title: string; preview: string; data: unknown; maxExpand?: number }) {
@@ -103,6 +103,51 @@ export function SpanDetail({ span, allSpans }: { span: Span; allSpans?: Span[] }
           <pre className="text-[11px] font-mono leading-relaxed" style={{ color: C.red }}>{tryJson(span.output_payload)}</pre>
         </div>
       )}
+
+      {/* F-020: dedicated block for the right-rail SpanDetail when the
+          clicked span is an opencode-dcp compress call. Mirrors the
+          ToolCallPill banner (locally inlined for this Feature; F-021
+          consolidates both into a shared component). */}
+      {info === TYPE_LABEL.COMPRESSION && span.input_payload && (() => {
+        let parsed: unknown;
+        try { parsed = JSON.parse(span.input_payload); } catch { parsed = null; }
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+        const obj = parsed as Record<string, unknown>;
+        const content = Array.isArray(obj.content) ? obj.content : [];
+        if (content.length === 0) return null;
+        const blocks: Array<Record<string, unknown>> = [];
+        for (const raw of content) {
+          if (!raw || typeof raw !== "object") continue;
+          const b = raw as Record<string, unknown>;
+          if (typeof b.startId !== "string" && typeof b.endId !== "string") continue;
+          blocks.push(b);
+        }
+        if (blocks.length === 0) return null;
+        const topic = typeof obj.topic === "string" ? obj.topic : null;
+        const TONE = "#5fbfb0";
+        return (
+          <div className="rounded-lg p-2.5" style={{ background: `${TONE}0d`, border: `1px solid ${TONE}33` }}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[9px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: TONE, background: `${TONE}22` }}>DCP compression</span>
+              {topic && <span className="text-[11px] font-mono" style={{ color: C.fg2 }}>{topic}</span>}
+              <span className="text-[10px] font-mono" style={{ color: C.fg0 }}>{blocks.length} block{blocks.length !== 1 ? "s" : ""}</span>
+            </div>
+            <div className="space-y-1">
+              {blocks.map((b, i) => {
+                const s = typeof b.startId === "string" ? b.startId : "—";
+                const e = typeof b.endId === "string" ? b.endId : "—";
+                const sum = typeof b.summary === "string" ? b.summary : "";
+                return (
+                  <div key={i} className="text-[11px] font-mono leading-relaxed">
+                    <span style={{ color: TONE }}>{s} → {e}</span>
+                    {sum ? <span style={{ color: C.fg1 }}> · {sum}</span> : <span style={{ color: C.fg0 }}> · block ref only</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {showMessagesTab && (
         <div className="flex-shrink-0 flex" style={{ borderBottom: `1px solid ${C.border}`, marginLeft: -6, marginBottom: 2 }}>

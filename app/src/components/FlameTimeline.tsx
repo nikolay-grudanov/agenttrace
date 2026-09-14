@@ -11,7 +11,7 @@ function spanTypeInfo(span: Span, subAgents: SubAgent[]): { color: string; label
   if (span.span_type === "TOOL_CALL" && subAgents.some(s => s.root_span_id === span.id)) {
     return { color: SPAN_TYPE_COLORS.SUB_AGENT_ROOT, label: SPAN_TYPE_LABELS.SUB_AGENT_ROOT };
   }
-  const t = spanTypeFromRaw(span.span_type);
+  const t = spanTypeFromRaw(span.span_type, span);
   return { color: SPAN_TYPE_COLORS[t], label: SPAN_TYPE_LABELS[t] };
 }
 
@@ -392,7 +392,7 @@ export function FlameTimeline({
               ? SPAN_TYPE_COLORS.SUB_AGENT_ROOT
               : span.span_type?.includes("LLM")
                 ? LLM_BAR_COLOR
-                : SPAN_TYPE_COLORS[spanTypeFromRaw(span.span_type)];
+                : SPAN_TYPE_COLORS[spanTypeFromRaw(span.span_type, span)];
             const isErr = span.status === "ERROR";
             const isLLM = span.span_type?.includes("LLM");
             const focusBarTool = () => {
