@@ -13,14 +13,17 @@
 
 ---
 
-## Roadmap (Tier 1, next-up) — 2026-09-04
+## Roadmap (Tier 1, next-up) — 2026-09-17
 
-These two are the highest-priority items after F-012 / F-013 / F-005 closed 2026-09-04. Detailed specs live in `ai-docs/specs/`:
+Public release is live (`v0.0.1` on npm under `latest`). Next-up items, in priority order:
 
-- **T1-A. FTS5 full-text search across spans** — currently only `event_name` is searchable, and the search misses messages, payloads, tool args. Spec: `specs/F-008-fts5-fulltext-search.md`. Backend + UI, ~3-5 days.
-- **T1-B. Bug: `loadConfig` cwd vs project root mismatch** — `eventName` from `raindrop.json` placed in workdir doesn't get picked up because `loadConfig()` looks at `<input.directory>/.opencode/raindrop.json`, not cwd. Affects multi-project isolation. Spec: `specs/F-011-loadconfig-cwd-bug.md`. Small fix, 1-2 hours.
+- **T1-A. Sync upstream `raindrop-ai/workshop` v0.1.21** — we're 8 commits behind upstream; their changes include a `display_name` column on runs (DB migration conflict — our `0002_fts5_spans` already occupies idx 2, theirs is `0002_flowery_shinobi_shaw`). Resolution plan: rename our FTS5 migration to `0003` with a migration-safety check (don't re-run if `spans_fts` already exists), then merge upstream. ~2-3 hours.
+- **T1-B. Git LFS for binaries** — current `binaries/raindrop-linux-x64` (79 MB) and `raindrop-windows-x64.exe` (99 MB) trigger GitHub "large file" warning on every push. Migrating to LFS silences the warning and speeds up `git clone`. ~1 hour.
+- **T1-C. macOS / linux-arm64 binaries** — only linux-x64 + win32-x64 ship today. Either expand `bin/raindrop.js` to support more platforms (requires cross-compile in CI on darwin host for ad-hoc signing) or document source-build as the only path. Open question: do we even own the platform set, or keep it narrow on purpose?
+- **T1-D. Build a real src/index.ts + tsup pipeline for the plugin** — currently the plugin ships only hand-edited `dist/index.{js,cjs}` (no source). This was fine for the alpha but blocks normal dev cycles (PR review, typecheck, lint, tests). Spec: feature F-002 originally. ~1-2 days.
+- **T1-E. Public-release hygiene automation** — `Makefile`-equivalent that runs pre-publish checklist + smoke test against the published tarball (not local dist) on every future `npm publish`.
 
-Handoff for a future session that picks this up: `HANDOFF-NEXT-SESSION.md`.
+The plugin-side T1-D (`loadConfig` cwd bug) is also open — see `ai-docs/specs/F-011-loadconfig-cwd-bug.md`.
 
 ---
 
@@ -424,6 +427,44 @@ This feature ships the workshop-side of that contract: the bridge sets those env
 **Commits:** `3122268` (C1 src/cloud/) → `451db47` (C2 src/auth/) → `b02efdf` (C3 install/README) → `2d98a41` (C4 deps) → this commit (C5 sweep + PLAN closeout)
 
 **Backward compat:** `source: "local" | "cloud" | null` retained in `src/db.ts` + `src/server.ts` for historical traces already in DB. Drip API URLs (`raindrop.ai` domain) are non-cloud (community content feature).
+
+---
+
+### F-022 — First public alpha release: `@grudanov-nikolay/opencode-workshop@0.0.1` — Closed 2026-09-16
+
+**Context:** Upstream `@raindrop/workshop` is `private: true` and ships only as pre-built binaries via the upstream `raindrop` CLI installer. To make the 14 fork features (F-006, F-008, F-012, F-014, F-015, F-016, F-017, F-018, F-019, F-020, F-021) installable via plain `npm install` for colleague-testing, we renamed the package to our own scope and bundled pre-compiled Bun binaries inside the npm tarball.
+
+**Result:** First public npm release as `@grudanov-nikolay/opencode-workshop@0.0.1`.
+
+**What shipped:**
+- npm: `@grudanov-nikolay/opencode-workshop@0.0.1` (69 MB compressed / 185 MB unpacked, 8 files)
+  - `bin/raindrop.js` — Node launcher (~70 lines), detects `process.platform`/`process.arch`, no runtime Bun dependency
+  - `binaries/raindrop-linux-x64` (79 MB) — pre-compiled Bun binary, built via `bun scripts/build-bun.ts --target=bun-linux-x64`
+  - `binaries/raindrop-windows-x64.exe` (99 MB) — pre-compiled Bun binary, built via `--target=bun-windows-x64`
+  - `bin/raindrop-dev` — upstream bash launcher, kept for source-mode compatibility
+  - `AGENTS.md`, `README.md`, `LICENSE`, `package.json`
+- GitHub: `nikolay-grudanov/opencode-workshop` → tag `v0.0.1`, release "First public alpha"
+- `.github/workflows/ci.yml` — new CI: `ci` job (lint/typecheck/test/build:ui) + `build-binaries` job (cross-compile linux-x64 + windows-x64)
+- README rewritten: 3 install paths (npm / curl / source), differences-from-upstream table, alpha notice
+- AGENTS.md: `## Publishing (npm)` section with pre-publish checklist and canonical build command (`RAINDROP_VERSION=0.0.1 bun scripts/build-bun.ts ...`)
+- LICENSE: dual copyright (c) 2026 Invisible Tools, Inc. (dba Raindrop) + (c) 2026 Nikolai Grudanov
+- `.gitignore`: `.zcode/` scratch dir added
+
+**Verified (2026-09-16):**
+- `node bin/raindrop.js --version` → `0.0.1`
+- `node bin/raindrop.js workshop --help` → help shown
+- `bun x tsc --noEmit` → 0 errors
+- `bun run build:ui` → `app/dist/index.html` created
+- `bun scripts/embed-migrations.ts --check` → up to date
+- `npm view @grudanov-nikolay/opencode-workshop version` → `0.0.1`
+- `npm view @grudanov-nikolay/opencode-workshop dist.tarball` → https://registry.npmjs.org/@grudanov-nikolay/opencode-workshop/-/opencode-workshop-0.0.1.tgz
+
+**Caveats / known limitations:**
+- Only linux-x64 and win32-x64 pre-built. macOS, linux-arm64, etc. require source build (`git clone && bun install && bun run dev`) or upstream curl installer (which loses fork features).
+- GitHub warns about large files (78 MB, 99 MB > 50 MB limit) but push succeeded. Consider Git LFS in a future release to silence the warning.
+- npm tarball contains only `bin/`, `binaries/`, and docs — no source code, no dev deps. To run dev mode (hot reload), clone the repo.
+
+**Commits:** `6a9ee0e chore(F-022): first public alpha 0.0.1 — npm package @grudanov-nikolay/opencode-workshop`, `09ad325 chore(F-022): rebuild binaries with RAINDROP_VERSION=0.0.1 (drop -local suffix)`. Pushed to `origin/main`, tag `v0.0.1`.
 
 ---
 
