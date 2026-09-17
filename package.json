@@ -1,6 +1,6 @@
 {
   "name": "@grudanov-nikolay/agenttrace",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "description": "Local-first trace debugger for AI agents — Kolya's fork of @raindrop/workshop. Installable via npm on Linux x64 and Windows x64; ships pre-compiled Bun binaries (no Bun required at runtime). Distributed as the `raindrop` CLI.",
   "main": "bin/raindrop.js",
   "bin": {
