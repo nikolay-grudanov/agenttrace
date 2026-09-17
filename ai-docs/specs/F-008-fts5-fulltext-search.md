@@ -2,7 +2,7 @@
 
 > **Status:** Planning spec. Roadmap Tier 1 (next-up). Not yet implemented.
 > **Author:** Miko (Hermes Agent) for Kolya Gruanov, 2026-09-04.
-> **Repo:** `~/workspase/projects/opencode-workshop` (local debugger fork of `raindrop-ai/workshop`).
+> **Repo:** `~/workspase/projects/agenttrace` (local debugger fork of `raindrop-ai/workshop`).
 > **Estimated effort:** 3-5 days (1 senior dev, single context).
 > **Commits target:** 3-4 atomic commits, like F-005/F-012 style.
 

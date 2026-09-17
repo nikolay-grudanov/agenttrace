@@ -8,12 +8,12 @@
 
 ## Что прочитай СНАЧАЛА (в этом порядке)
 
-1. **`~/workspase/projects/opencode-workshop/ai-docs/HANDOFF-NEXT-SESSION.md`** — состояние дел, что закрыто, что открыто, ключевые constraints.
-2. **`~/workspase/projects/opencode-workshop/ai-docs/PLAN.md`** — Roadmap Tier 1 секция наверху + F-012 (Active) + F-002 status note.
-3. **`~/workspase/projects/opencode-workshop-plugin/ai-docs/PLAN.md`** — Roadmap Tier 1 секция наверху + F-005 (Active).
+1. **`~/workspase/projects/agenttrace/ai-docs/HANDOFF-NEXT-SESSION.md`** — состояние дел, что закрыто, что открыто, ключевые constraints.
+2. **`~/workspase/projects/agenttrace/ai-docs/PLAN.md`** — Roadmap Tier 1 секция наверху + F-012 (Active) + F-002 status note.
+3. **`~/workspase/projects/agenttrace-opencode-plugin/ai-docs/PLAN.md`** — Roadmap Tier 1 секция наверху + F-005 (Active).
 4. **Спеки Tier 1 (прочитай оба перед стартом):**
-   - `~/workspase/projects/opencode-workshop/ai-docs/specs/F-008-fts5-fulltext-search.md` — SQLite FTS5 по спанам (Workshop, 3-5 дней).
-   - `~/workspase/projects/opencode-workshop-plugin/ai-docs/specs/F-011-loadconfig-cwd-bug.md` — bug `loadConfig()` cwd (Plugin, 1-2 часа).
+   - `~/workspase/projects/agenttrace/ai-docs/specs/F-008-fts5-fulltext-search.md` — SQLite FTS5 по спанам (Workshop, 3-5 дней).
+   - `~/workspase/projects/agenttrace-opencode-plugin/ai-docs/specs/F-011-loadconfig-cwd-bug.md` — bug `loadConfig()` cwd (Plugin, 1-2 часа).
 
 ## С чего начать
 

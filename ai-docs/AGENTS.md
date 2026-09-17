@@ -30,7 +30,7 @@ This is **Kolya's maintained fork** of the OSS [raindrop-ai/workshop](https://gi
 3. **[`PLAN.md`](PLAN.md)** — current Features and open todos. **Update in the same commit as the code change.**
 4. **(Optional)** [`HANDOFF.md`](HANDOFF.md) — last-session summary, useful after long pauses.
 5. **Know the related repos:**
-   - Plugin: `~/workspase/projects/opencode-workshop-plugin/` (publishes spans to this Workshop daemon)
+   - Plugin: `~/workspase/projects/agenttrace-opencode-plugin/` (publishes spans to this Workshop daemon)
    - Plugin's own docs: that repo's `ai-docs/PLAN.md`
    - Hermes WebUI: `/home/gna/hermes-webui/` (has `session_export_html.py`, the prototype F-005 ports from)
 
@@ -96,7 +96,7 @@ Smoke test procedure:
 | Sub-agent detection | `src/agents.ts` |
 | Replay logic | `src/replay.ts` |
 | HTML export prototype (F-005 input) | `/home/gna/hermes-webui/api/session_export_html.py` |
-| Companion plugin | `~/workspase/projects/opencode-workshop-plugin/ai-docs/PLAN.md` |
+| Companion plugin | `~/workspase/projects/agenttrace-opencode-plugin/ai-docs/PLAN.md` |
 | Workshop API base | `http://localhost:5899/api/` (e.g. `/api/runs?limit=N`, `/api/runs/:id/outline`) |
 
 ---

@@ -32,7 +32,7 @@ F-003 is now **functionally closed** on both sides of the contract: the workshop
 - `tests/agents.test.ts`: new file, 9 tests pinning Pattern 1/2/3 + attribute contract + precedence + JSON tolerance.
 - `ai-docs/PLAN.md`: F-003 todos updated (sidebar item + real-session smoke remain as deferred).
 
-**Companion plugin** (separate repo `~/workspase/projects/opencode-workshop-plugin`, v0.1.0-kolya.7): added `extractTaskLabel(args)` helper + conditional `attrString("subagent_name", taskLabel)` in the `task` branch of `tool.execute.before` for both `dist/index.js` and `dist/index.cjs`. Syntax-check passes (`node --check` both bundles). The label is derived from `args.description` (preferred, up to 120 chars) or `args.prompt` (first 60 chars).
+**Companion plugin** (separate repo `~/workspase/projects/agenttrace-opencode-plugin`, v0.1.0-kolya.7): added `extractTaskLabel(args)` helper + conditional `attrString("subagent_name", taskLabel)` in the `task` branch of `tool.execute.before` for both `dist/index.js` and `dist/index.cjs`. Syntax-check passes (`node --check` both bundles). The label is derived from `args.description` (preferred, up to 120 chars) or `args.prompt` (first 60 chars).
 
 **Fixture repair finding (important for future testing):** the base F-003 e2e test (`workshop-actions.spec.ts` L213) was RED before the extension work — `scripts/seed-traces.ts` fixture 3's `subagent.review` span lacked `ai.toolCall.name`, so `inferSpanType` typed it INTERNAL and `detectSubAgents` never fired. Repaired by adding `ai.toolCall.name` to the root + reparenting `read_file` under the LLM child + adding a new nested `subagent.lint` sub-agent. Base F-003 e2e now green; new drill-down + timeline e2e tests added (2 tests).
 
@@ -61,7 +61,7 @@ F-003 is now **functionally closed** on both sides of the contract: the workshop
 ## Resume checklist (next session)
 
 1. **Real-session smoke for F-003 extension** — start daemon (`bun run dev`), run an OpenCode session that uses the `task` tool with nested sub-agents, verify the drill-down + breadcrumb + timeline bands behave on real spans (not just fixture data). Needs Kolya's OK before touching daemon. Corresponds to `openspec/changes/extend-subagent-drilldown-f003/tasks.md` 5.5.
-2. **F-003 plugin-side metadata** — patch `opencode-workshop-plugin` (separate repo `~/workspase/projects/opencode-workshop-plugin/`) to capture `task` tool's `description` arg into `metadata.subagent_name` so the UI shows real names instead of fallbacks (`subagent.review`, `task N`).
+2. **F-003 plugin-side metadata** — patch `opencode-workshop-plugin` (separate repo `~/workspase/projects/agenttrace-opencode-plugin/`) to capture `task` tool's `description` arg into `metadata.subagent_name` so the UI shows real names instead of fallbacks (`subagent.review`, `task N`).
 3. **F-002** — replace Codex/Claude/Anthropic integrations with OpenCode equivalents. Planning done (see PLAN.md), code untouched. Will require careful grep + dependency audit.
 4. **Archive completed OpenSpec changes** when Kolya signs off: `extend-subagent-drilldown-f003` is implemented but not yet archived per OpenSpec convention (archive happens after final approval).
 5. **Run `graphify update .`** after any code change to refresh the knowledge graph.

@@ -166,6 +166,7 @@ NOTES
 - Verify the launcher end-to-end on a clean machine (or fresh shell): `npm i -g @grudanov-nikolay/agenttrace && raindrop workshop serve`.
 - Move the in-flight Feature (e.g. `F-022`) from `## Active Features` to `## Closed Features` in `ai-docs/PLAN.md` with `Closed <date>`.
 - **Also update** the `## Roadmap (Tier 1, next-up)` section in `ai-docs/PLAN.md` to drop the just-shipped item and add any newly-discovered work. A stale roadmap is worse than no roadmap.
-- **Also update** the umbrella `~/workspase/projects/opencode-workshop-stack/STATUS.md` (released versions + roadmap table). This is the single artifact a fresh session reads first to know "where is this stack right now".
+- **Also update** the umbrella `~/workspase/projects/agenttrace-stack/STATUS.md` (released versions + roadmap table). This is the single artifact a fresh session reads first to know "where is this stack right now".
+- **Also update** `~/workspase/projects/agenttrace-stack/AGENTS.md#0` if the rename affected any cross-repo path (F-024 marker).
 - **Also record** the publish fact in Hindsight (`hindsight_retain`) so future sessions recall it without re-reading files.
-- See `~/workspase/projects/opencode-workshop-stack/AGENTS.md#6` for the umbrella-level rule on durable-state hygiene after every release.
+- See `~/workspase/projects/agenttrace-stack/AGENTS.md#6` for the umbrella-level rule on durable-state hygiene after every release.

@@ -8,14 +8,14 @@
 
 ### T1-A. F-008 — SQLite FTS5 full-text search across spans
 - **Spec:** `ai-docs/specs/F-008-fts5-fulltext-search.md`
-- **Repo:** `~/workspase/projects/opencode-workshop` (Workshop, not plugin)
+- **Repo:** `~/workspase/projects/agenttrace` (Workshop, not plugin)
 - **Estimated effort:** 3-5 days
 - **Why this first:** It's the most painful gap in daily use. You literally cannot search "where did my LLM say 'Connection refused'" today.
 - **Where to start:** Read the spec, start with F-008-P1 (storage layer).
 
 ### T1-B. F-011 — Bug fix: `loadConfig()` cwd vs project root
 - **Spec:** `ai-docs/specs/F-011-loadconfig-cwd-bug.md`
-- **Repo:** `~/workspase/projects/opencode-workshop-plugin` (Plugin, not Workshop)
+- **Repo:** `~/workspase/projects/agenttrace-opencode-plugin` (Plugin, not Workshop)
 - **Estimated effort:** 1-2 hours
 - **Why this is small but important:** Without this fix, multi-project isolation (per-`eventName` dashboards) doesn't work — all sessions land as `event_name="opencode_session"` regardless of `raindrop.json` in cwd.
 - **Where to start:** Read the spec, do F-011-P1 (3 lines change in `loadConfig()`).
@@ -24,11 +24,11 @@
 
 | Path | State |
 |---|---|
-| `~/workspase/projects/opencode-workshop/ai-docs/PLAN.md` | Synced, has Tier 1 roadmap section at top |
-| `~/workspase/projects/opencode-workshop/ai-docs/specs/F-008-fts5-fulltext-search.md` | Ready to implement |
-| `~/workspase/projects/opencode-workshop-plugin/ai-docs/PLAN.md` | Synced, has Tier 1 roadmap section at top |
-| `~/workspase/projects/opencode-workshop-plugin/ai-docs/specs/F-011-loadconfig-cwd-bug.md` | Ready to implement |
-| `~/workspase/projects/opencode-workshop-plugin/dist/{index.js,index.cjs}` | At v0.1.0-kolya.12 (F-005 shipped) |
+| `~/workspase/projects/agenttrace/ai-docs/PLAN.md` | Synced, has Tier 1 roadmap section at top |
+| `~/workspase/projects/agenttrace/ai-docs/specs/F-008-fts5-fulltext-search.md` | Ready to implement |
+| `~/workspase/projects/agenttrace-opencode-plugin/ai-docs/PLAN.md` | Synced, has Tier 1 roadmap section at top |
+| `~/workspase/projects/agenttrace-opencode-plugin/ai-docs/specs/F-011-loadconfig-cwd-bug.md` | Ready to implement |
+| `~/workspase/projects/agenttrace-opencode-plugin/dist/{index.js,index.cjs}` | At v0.1.0-kolya.12 (F-005 shipped) |
 | `~/.config/opencode/plugins/opencode-workshop-plugin.js` | Static copy at kolya.12 |
 | Workshop daemon | Running on pid 2202413 via `bun --watch src/index.ts workshop serve` — do NOT restart unless Kolya tells you to (NO SELF-RESTART rule) |
 | `~/.raindrop/raindrop_workshop.db` | ~520 spans, ~30 runs, all eventName="opencode_session" except new F-005/F-013 tests |
