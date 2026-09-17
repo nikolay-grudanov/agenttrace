@@ -23,12 +23,103 @@ Public release is live (`v0.0.1` on npm under `latest`). Next-up items, in prior
 - **T1-D. Build a real src/index.ts + tsup pipeline for the plugin** — currently the plugin ships only hand-edited `dist/index.{js,cjs}` (no source). This was fine for the alpha but blocks normal dev cycles (PR review, typecheck, lint, tests). Spec: feature F-002 originally. ~1-2 days.
 - **T1-E. Public-release hygiene automation** — `Makefile`-equivalent that runs pre-publish checklist + smoke test against the published tarball (not local dist) on every future `npm publish`.
 - **T1-F. F-023 — Multi-source agent instrumentation (Qwen Code + GigaCode)** — Plan-only stage. Bridge-only architecture (HTTP hooks, no OTLP): new sibling repo `agenttrace-qwen-bridge` (Node/TS, renamed from `openworkshop-qwen-bridge`) translates Qwen Code + GigaCode hook events into the OpenCode-plugin wire format and POSTs to `localhost:5899/v1/`. Workshop daemon gets minimal additions (`agent_provider` in `runs.metadata`, UI badge/facet). GigaCode adapter authored by corporate agent on Kolya's laptop against our wire contract; Qwen Code adapter authored here. Stages 0–7 estimated ~4 days. See `openspec/changes/archive/F-023-multi-source-ingestion/proposal.md`, `openspec/specs/source-aware-ingestion/spec.md`, `ai-docs/specs/F-023-multi-source-ingestion-research.md`.
+- **T1-G. F-025 — Rename CLI command `raindrop` → `agenttrace`** — Kolya wants `npm install -g @grudanov-nikolay/agenttrace && agenttrace serve` to feel natural. Three open design decisions (env-vars keep/rename/dual; DB path keep/rename/dual; bin alias keep/drop). 5 stages, ~7-10 hours total. See `### F-025 — Rename CLI command \`raindrop\` → \`agenttrace\` (and CLI surface cleanup)` below.
 
 The plugin-side T1-D (`loadConfig` cwd bug) is also open — see `ai-docs/specs/F-011-loadconfig-cwd-bug.md`.
 
 ---
 
 ## Active Features
+
+### F-025 — Rename CLI command `raindrop` → `agenttrace` (and CLI surface cleanup)
+
+**Context:** F-024 renamed the stack at the package level (`@grudanov-nikolay/opencode-workshop` → `@grudanov-nikolay/agenttrace`, etc.) but left the **shell CLI command** as `raindrop` for backwards-compat with the `0.0.1` alpha. After F-024 Kolya decided this is confusing — users now install `agenttrace` but type `raindrop workshop serve`. F-025 promotes the CLI to `agenttrace` with the same subcommand shape (`serve`, `setup`, `status`, `reset`, `version`, etc.).
+
+**Three open design decisions** (Kolya must resolve before implementation begins — each is independent):
+
+1. **`RAINDROP_*` env-vars** — keep as-is, rename to `AGENTTRACE_*`, or dual-support both?
+   - Keep (`RAINDROP_PROJECT_ID`, `RAINDROP_LOCAL_WORKSHOP_URL`, `RAINDROP_WRITE_KEY`, `RAINDROP_WORKSHOP_DB_PATH`, `RAINDROP_WORKSHOP_UI_PORT`): no breaking change, but inconsistent.
+   - Rename (`AGENTTRACE_*`): consistent, but breaking for shell exports, scripts, CI configs.
+   - Dual-support: read `AGENTTRACE_*` first, fall back to `RAINDROP_*` with deprecation log. Best UX, ~20 lines of code.
+   - **Recommendation:** dual-support for one major version cycle (1-2 minor releases), then drop `RAINDROP_*`.
+
+2. **DB path `~/.raindrop/raindrop_workshop.db`** — keep, rename, or dual?
+   - Keep: existing data untouched, but inconsistent path on disk.
+   - Rename to `~/.agenttrace/agenttrace.db`: requires data-migration step on first launch.
+   - Dual: probe both paths at startup, prefer the new one, symlink the old for reads.
+   - **Recommendation:** rename + auto-migrate on first launch (read old DB → write new → symlink old for back-compat). One-shot.
+
+3. **Keep `raindrop` as a deprecated alias in `bin`?** — drop or keep with warning?
+   - Drop `raindrop` from `package.json:bin` entirely: clean, but `0.0.1` users who scripted `raindrop ...` break.
+   - Keep both `bin: { "agenttrace": "...", "raindrop": "..." }`: alias `bin/raindrop` prints a deprecation warning then forwards to `agenttrace`. ~10 lines.
+   - **Recommendation:** keep alias for one minor cycle (0.1.0), remove in 0.2.0.
+
+**Files to edit in this repo (`agenttrace/`):**
+
+- `package.json`
+  - `bin: { "raindrop": "bin/raindrop.js" }` → `bin: { "agenttrace": "bin/agenttrace.js", "raindrop": "bin/raindrop.js" }` (if alias kept) OR just `agenttrace` (if dropped)
+  - `main: "bin/raindrop.js"` → `bin/agenttrace.js`
+  - `description`: replace `raindrop` with `agenttrace`
+  - `scripts.build:bun:stage` — paths to `build/bun/raindrop-bun-*` and `binaries/raindrop-*` — **do NOT rename these** (they're the bundled Bun binary filenames, not the CLI command; renaming them would invalidate already-shipped tarballs). The build script stays the same; only the launcher filename and `bin:` entry change.
+  - `scripts.link-dev`: `ln -sf ../bin/raindrop-dev node_modules/.bin/raindrop-dev` — keep (upstream bash script)
+
+- `bin/raindrop.js` → rename to `bin/agenttrace.js` (keep `bin/raindrop.js` if alias kept; it forwards to `agenttrace.js`)
+  - `PLATFORM_MAP` keys unchanged (binary file names stay `raindrop-linux-x64` etc.)
+  - Header comment updated
+  - `process.stderr.write(\`raindrop: failed to spawn ...\`)` → `process.stderr.write(\`agenttrace: failed to spawn ...\`)`
+
+- `bin/raindrop-dev` — **leave untouched** (upstream-owned per `agenttrace/AGENTS.md` hard rule "Never edit upstream docs at repo root")
+
+- `README.md` — install instructions, command examples, env-var table
+- `AGENTS.md` — Publishing + Post-publish sections, examples
+- `ai-docs/PLAN.md`
+  - F-024 entry — update "Out of scope" section to remove "no breaking CLI rename" once F-025 lands
+  - F-022 closed entry — leave (historical record of what shipped at 0.0.1)
+- `openspec/config.yaml` — no CLI references there, skip
+
+**Out of scope (do NOT touch):**
+
+- `bin/raindrop-dev` — upstream-owned
+- `@raindrop-ai/*` runtime dependencies — those are SDK modules, name is from npm namespace
+- F-022 closed description (historical record of what shipped under `raindrop` at 0.0.1)
+- `openspec/changes/archive/*` — closed proposals
+- `node_modules/`, `dist/`, `build/`
+
+**Cross-repo impact:**
+
+- `agenttrace-opencode-plugin/` — plugin doesn't use the `raindrop` CLI; plugin sends HTTP to `localhost:5899`. No change needed. But `RAINDROP_*` env-vars it reads (e.g. `RAINDROP_PROJECT_ID`, `RAINDROP_SIDEPANEL_ACTIVE`, `RAINDROP_LOCAL_WORKSHOP_URL`) are decision #1's reach. If we rename `RAINDROP_*` → `AGENTTRACE_*`, plugin must follow.
+- `agenttrace-qwen-bridge/` — already named `agenttrace-qwen-bridge` (F-024); bridge CLI command is already `agenttrace-qwen-bridge`. **No change needed.** But env-vars (`WORKSHOP_URL`, `BRIDGE_PORT`, `BRIDGE_LOG_LEVEL`, `BRIDGE_RATE_LIMIT_PER_MIN`) are agenttrace-specific, no `RAINDROP_*` reach.
+
+**Implementation stages:**
+
+- **Stage 1 (CLI rename only, no env-var change).** Decision #3 = drop `raindrop` alias. Effort: 1-2 hours.
+- **Stage 2 (env-var dual-support).** Add `AGENTTRACE_*` aliases with `RAINDROP_*` fallback + deprecation log. Effort: 2-3 hours.
+- **Stage 3 (DB path rename + migration).** Decision #2 = rename + migrate. Effort: 2-3 hours.
+- **Stage 4 (docs + release notes).** Update README/AGENTS, tag as `0.1.0` (first post-F-024 release). Effort: 1 hour.
+- **Stage 5 (live smoke on Kolya's machine).** Verify `npm install -g @grudanov-nikolay/agenttrace@0.1.0 && agenttrace serve` works end-to-end. Effort: 30 min.
+
+**Total estimate:** ~7-10 hours wall-clock, broken into 5 buildable stages. Single release (0.1.0) ships Stages 1+4; Stages 2, 3, 5 can land together if Kolya wants, or stay split.
+
+**Open questions for Kolya (must resolve before Stage 1):**
+
+1. Decision #1: keep / rename / dual-support env-vars?
+2. Decision #2: keep / rename / dual DB path?
+3. Decision #3: keep `raindrop` bin alias for one cycle, or drop now?
+4. Should `bin/agenttrace.js` accept `agenttrace serve` AND `agenttrace workshop serve` (upstream-style with `workshop` subcommand), or just `agenttrace serve` directly? (Both cost the same; first is more flexible.)
+5. Bump version to `0.1.0` for this release (first minor post-F-024), or stay on `0.0.x` patch (`0.0.3`) since CLI rename is technically breaking?
+
+**Todos:**
+- [ ] Q1-Q5 answered by Kolya
+- [ ] Stage 1: `bin/agenttrace.js` + `package.json:bin` + `main`
+- [ ] Stage 1: README + AGENTS examples
+- [ ] Stage 1: rebuild binaries (NOT needed — bin names are baked into launcher via PLATFORM_MAP keys, not renamed)
+- [ ] Stage 1: tag + release `0.1.0` (or `0.0.3`)
+- [ ] Stage 2: env-var dual-support (if Q1 = dual)
+- [ ] Stage 3: DB path migration (if Q2 = rename)
+- [ ] Stage 4: docs + release notes
+- [ ] Stage 5: live smoke test
+
+Refs F-024 (chained from — supersedes the "no breaking CLI change" decision documented there).
 
 ### F-024 — Rename stack from `opencode-workshop` to `agenttrace`
 
@@ -52,7 +143,7 @@ The plugin-side T1-D (`loadConfig` cwd bug) is also open — see `ai-docs/specs/
 - `ai-docs/HANDOFF*.md` — historical session notes, leave as-is
 - `openspec/changes/archive/*` — closed proposals, history
 - `ai-docs/PLAN.md` lines referencing `@grudanov-nikolay/opencode-workshop` inside Closed Features (F-022 description) — this is a record of what was shipped; rewriting it would falsify history
-- `package.json:bin` — `raindrop` CLI command stays (no breaking CLI rename)
+- `package.json:bin` — `raindrop` CLI command stays (no breaking CLI rename) **→ superseded by F-025; CLI rename happens there.**
 
 **Deferred to separate Kolya-authorized steps (not part of this commit):**
 - `npm publish @grudanov-nikolay/agenttrace@0.1.0`
