@@ -22,12 +22,71 @@ Public release is live (`v0.0.1` on npm under `latest`). Next-up items, in prior
 - **T1-C. macOS / linux-arm64 binaries** — only linux-x64 + win32-x64 ship today. Either expand `bin/raindrop.js` to support more platforms (requires cross-compile in CI on darwin host for ad-hoc signing) or document source-build as the only path. Open question: do we even own the platform set, or keep it narrow on purpose?
 - **T1-D. Build a real src/index.ts + tsup pipeline for the plugin** — currently the plugin ships only hand-edited `dist/index.{js,cjs}` (no source). This was fine for the alpha but blocks normal dev cycles (PR review, typecheck, lint, tests). Spec: feature F-002 originally. ~1-2 days.
 - **T1-E. Public-release hygiene automation** — `Makefile`-equivalent that runs pre-publish checklist + smoke test against the published tarball (not local dist) on every future `npm publish`.
+- **T1-F. F-023 — Multi-source agent instrumentation (Qwen Code + GigaCode)** — Plan-only stage. Bridge-only architecture (HTTP hooks, no OTLP): new sibling repo `openworkshop-qwen-bridge` (Node/TS) translates Qwen Code + GigaCode hook events into the OpenCode-plugin wire format and POSTs to `localhost:5899/v1/`. Workshop daemon gets minimal additions (`agent_provider` in `runs.metadata`, UI badge/facet). GigaCode adapter authored by corporate agent on Kolya's laptop against our wire contract; Qwen Code adapter authored here. Stages 0–7 estimated ~4 days. See `openspec/changes/archive/F-023-multi-source-ingestion/proposal.md`, `openspec/specs/source-aware-ingestion/spec.md`, `ai-docs/specs/F-023-multi-source-ingestion-research.md`.
 
 The plugin-side T1-D (`loadConfig` cwd bug) is also open — see `ai-docs/specs/F-011-loadconfig-cwd-bug.md`.
 
 ---
 
 ## Active Features
+
+### F-023 — Multi-source agent instrumentation (Qwen Code + GigaCode) — Plan only
+
+**Context:** Workshop currently ingests spans from OpenCode only, via our companion plugin. Kolya wants the same fidelity for Qwen Code (Alibaba's fork of Gemini CLI) and GigaCode (Sberbank's fork of Qwen Code). Both tools emit standard OpenTelemetry GenAI semantic conventions natively — no vendor SDK adapter needed, just a new GenAI-SC-aware adapter and a hook-handler endpoint for Qwen Code's `http`-type hooks. This feature does NOT violate `openspec/config.yaml` HARD rule "OpenCode-only — never add Codex/Claude/Anthropic-specific code" because Qwen Code / GigaCode are Gemini-CLI-family forks that emit industry-standard OTel GenAI-SC; the adapters target the standard, not a vendor SDK.
+
+**Decisions (locked 2026-09-17, scope-check approved):**
+- **Channel C (hybrid):** OTLP ingest at `:5899/v1/traces` for span tree / tokens / model info + HTTP-hook handler at `:5899/api/qwen/hooks` for `PreToolUse` / `PostToolUse` / `Stop` / `SubagentStop` events.
+- **GigaCode:** treated as Qwen-Code-compatible for now. Smoke-test deferred to corporate laptop (F-024 ready if divergence appears).
+- **Target version:** `qwen-code` stable tag (exact tag pinned at Stage 5 smoke-test time).
+- **UI:** source-aware badge in `RunsPage` + `SearchPage` + `RunDetail`, source facet in `/api/facets`, both languages (en + ru).
+- **Schema:** add `source` enum column to `runs` and `spans` (Drizzle migration `0004_source.sql`), indexed.
+
+**Scope anchors (no code yet):**
+- `openspec/changes/archive/F-023-multi-source-ingestion/proposal.md` — design / scope / decisions / risks.
+- `openspec/specs/source-aware-ingestion/spec.md` — capability spec (R1-R6 requirements, S1-S7 scenarios, OQ1-OQ4 open questions).
+- `ai-docs/specs/F-023-multi-source-ingestion-research.md` — full Qwen Code span inventory × `NormalizedSpan` mapping table (LLM, Tool, Subagent, Hook, Daemon spans), hook-event shapes, GigaCode assumptions, adapter pseudocode, migration SQL.
+
+**Stages (each = one Feature-step, each buildable/testable independently):**
+- Stage 0. Research + ADR (proposal.md + spec.md + research.md done; PLAN.md entry written)
+- Stage 1. Ingestion pipeline + `source` field migration (~1 day)
+- Stage 2. GenAI-SC adapters in `src/spans/adapters/qwen.ts` (~1 day)
+- Stage 3. HTTP-hook handler `POST /api/qwen/hooks` (~½ day)
+- Stage 4. UI source-aware display (~½ day)
+- Stage 5. End-to-end live smoke on Kolya's local Qwen Code with `glm` provider (~½ day)
+- Stage 6. Docs + release 0.0.2 (~½ day)
+
+**Total estimate:** ~4 days wall-clock.
+
+**Todos:**
+- [x] Plan F-023 (proposal.md, spec.md, research.md written; PLAN.md entry written)
+- [ ] Stage 0.4 — Kolya reviews proposal + spec + research, approves scope
+- [ ] Kolya provides: exact `qwen-code` stable tag, exact GigaCode `service.name` (or confirms "sandbox-agent")
+- [ ] Stage 1.1 — Drizzle schema `source` enum
+- [ ] Stage 1.2 — Migration `0004_source.sql`
+- [ ] Stage 1.3 — `parseOtlpRequest` `service.name` → `source` mapping
+- [ ] Stage 1.4 — `inferSpanType` Qwen-prefix rules
+- [ ] Stage 1.5 — Payload-size clamp guard
+- [ ] Stage 2.1 — `qwenGenAiLlmAdapter`
+- [ ] Stage 2.2 — `qwenGenAiToolAdapter`
+- [ ] Stage 2.3 — `qwenSubagentAdapter`
+- [ ] Stage 2.4 — Register in `ADAPTERS[]`
+- [ ] Stage 3.1 — `POST /api/qwen/hooks` handler
+- [ ] Stage 3.2 — Hook span tree stitching via `gen_ai.conversation.id`
+- [ ] Stage 3.3 — Rate-limit guard
+- [ ] Stage 4.1 — `RunsPage` source column + chip
+- [ ] Stage 4.2 — Source facet in `/api/facets`
+- [ ] Stage 4.3 — Source filter in `SearchPage`
+- [ ] Stage 4.4 — i18n labels (en + ru)
+- [ ] Stage 4.5 — `RunDetail` source chip
+- [ ] Stage 5.1 — Live smoke recipe doc
+- [ ] Stage 5.2 — Run Kolya's Qwen Code against workshop daemon (requires Kolya's daemon restart — AGENTS.md hard rule #2)
+- [ ] Stage 5.3 — Snapshot DB and attach artifact
+- [ ] Stage 6.1 — `README.md` «Supported sources» table
+- [ ] Stage 6.2 — Update umbrella `STATUS.md`
+- [ ] Stage 6.3 — Bump version 0.0.1 → 0.0.2, rebuild binaries, publish, tag, GitHub release
+- [ ] Stage 6.4 — `hindsight_retain` publish fact (AGENTS.md hard rule #6)
+
+**Plugin-repo impact:** NONE (Qwen Code emits OTel natively; GigaCode = OpenCode-attach covered by existing plugin).
 
 ### F-021 — DCP compression analytics: convo stats, feed, full summaries
 
