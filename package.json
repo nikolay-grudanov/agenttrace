@@ -1,6 +1,6 @@
 {
-  "name": "@grudanov-nikolay/opencode-workshop",
-  "version": "0.0.1",
+  "name": "@grudanov-nikolay/agenttrace",
+  "version": "0.1.0",
   "description": "Local-first trace debugger for AI agents — Kolya's fork of @raindrop/workshop. Installable via npm on Linux x64 and Windows x64; ships pre-compiled Bun binaries (no Bun required at runtime). Distributed as the `raindrop` CLI.",
   "main": "bin/raindrop.js",
   "bin": {
@@ -98,13 +98,13 @@
   ],
   "author": "Nikolai Grudanov <nikolay-grudanov@users.noreply.github.com>",
   "license": "MIT",
-  "homepage": "https://github.com/nikolay-grudanov/opencode-workshop",
+  "homepage": "https://github.com/nikolay-grudanov/agenttrace",
   "bugs": {
-    "url": "https://github.com/nikolay-grudanov/opencode-workshop/issues"
+    "url": "https://github.com/nikolay-grudanov/agenttrace/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nikolay-grudanov/opencode-workshop.git"
+    "url": "git+https://github.com/nikolay-grudanov/agenttrace.git"
   },
   "publishConfig": {
     "access": "public"

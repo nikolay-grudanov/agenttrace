@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="./docs/assets/workshop-hero.png" alt="Workshop: the local debugger your agent is missing." width="100%">
+  <img src="./docs/assets/workshop-hero.png" alt="agenttrace: the local debugger your agent is missing." width="100%">
 </p>
 
-# Raindrop Workshop (Kolya fork)
+# agenttrace (Kolya fork, formerly `opencode-workshop`)
 
 **The local debugger your agent is missing.** Watch your agent think locally,
 the moment it happens: every token, every tool call, every decision.
@@ -11,12 +11,14 @@ Give Claude Code the power to read your traces, write evals against your
 codebase, and fix what's broken.
 
 This is Nikolai Grudanov's fork of [@raindrop-ai/workshop](https://github.com/raindrop-ai/workshop)
-(distributed here as `@grudanov-nikolay/opencode-workshop`). It ships the same
-daemon plus 14 additional features on top of upstream. See [Differences from
-upstream](#differences-from-upstream) below.
+(distributed here as `@grudanov-nikolay/agenttrace`, npm package renamed from
+`@grudanov-nikolay/opencode-workshop@0.0.1` → `@grudanov-nikolay/agenttrace@0.1.0`
+on 2026-09-17). It ships the same daemon plus 14 additional features on top of
+upstream. See [Differences from upstream](#differences-from-upstream) below.
 
-> **Alpha notice:** `0.0.1` is the first public alpha. Expect rough edges.
-> File issues at <https://github.com/nikolay-grudanov/opencode-workshop/issues>.
+> **Alpha notice:** `0.1.0` is the first public alpha under the new name.
+> The previous `0.0.1` was published as `@grudanov-nikolay/opencode-workshop`.
+> File issues at <https://github.com/nikolay-grudanov/agenttrace/issues>.
 
 ## Install
 
@@ -25,7 +27,7 @@ Pick **one** of the two methods below — they install the same daemon.
 ### Option A — npm (Linux x64, Windows x64)
 
 ```bash
-npm install -g @grudanov-nikolay/opencode-workshop
+npm install -g @grudanov-nikolay/agenttrace
 raindrop workshop serve
 ```
 
@@ -51,8 +53,8 @@ Use this if you want to hack on Workshop itself or run on an unsupported
 platform.
 
 ```bash
-git clone https://github.com/nikolay-grudanov/opencode-workshop.git
-cd opencode-workshop
+git clone https://github.com/nikolay-grudanov/agenttrace.git
+cd agenttrace
 bun install
 bun run dev    # starts daemon on :5899 + Vite UI on :5900
 ```
@@ -70,7 +72,7 @@ Open your coding agent of choice in your repository and run:
 This will instrument your agent with Raindrop tracing and open Workshop in your browser.
 
 If you're using OpenCode, install
-[`@grudanov-nikolay/opencode-workshop-plugin`](https://www.npmjs.com/package/@grudanov-nikolay/opencode-workshop-plugin)
+[`@grudanov-nikolay/agenttrace-opencode-plugin`](https://www.npmjs.com/package/@grudanov-nikolay/agenttrace-opencode-plugin)
 (separate package) and add it to your OpenCode config.
 
 ## What it does
@@ -134,7 +136,7 @@ raindrop workshop reset    # delete local DB after confirmation
 
 `raindrop update` is not available via the npm-install path because the npm
 package always carries the latest pre-compiled binary. To update, run
-`npm update -g @grudanov-nikolay/opencode-workshop`.
+`npm update -g @grudanov-nikolay/agenttrace`.
 
 ## License
 

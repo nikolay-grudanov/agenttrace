@@ -4,7 +4,7 @@ context: |
   Project: Kolya's fork of raindrop-ai/workshop — a LOCAL-ONLY AI agent debugger.
   - Stack: TypeScript, Bun, Drizzle ORM, SQLite, React + Vite.
   - Daemon runs on localhost:5899 (HTTP + WebSocket).
-  - Public repo: https://github.com/nikolay-grudanov/opencode-workshop
+  - Public repo: https://github.com/nikolay-grudanov/agenttrace (renamed from opencode-workshop on 2026-09-17)
   - Upstream: https://github.com/raindrop-ai/workshop (do NOT sync cloud/codex/claude code back).
 
   Fork conventions (HARD constraints — see ai-docs/AGENTS.md):
@@ -16,7 +16,7 @@ context: |
   - Never git push without explicit user "push" instruction.
   - Never restart the daemon or OpenCode without explicit OK.
   - Sub-agent detection: src/agents.ts. Span normalization: src/spans/normalize.ts. Replay: src/replay.ts.
-  - Companion plugin (separate repo): ~/workspase/projects/opencode-workshop-plugin/ — produces spans consumed by this daemon.
+  - Companion plugin (separate repo): ~/workspase/projects/agenttrace-opencode-plugin/ (renamed from opencode-workshop-plugin on 2026-09-17) — produces spans consumed by this daemon.
 
 rules:
   proposal:

@@ -108,7 +108,11 @@ research workflow above — the skill handles the graphify portion.)
 
 ## Publishing (npm)
 
-The repo ships as `@grudanov-nikolay/opencode-workshop@<version>` on npm. The
+The repo ships as `@grudanov-nikolay/agenttrace@<version>` on npm (renamed from
+`@grudanov-nikolay/opencode-workshop` on 2026-09-17, F-024). The npm command
+to install remains `npm install -g @grudanov-nikolay/agenttrace` and the
+runtime CLI stays `raindrop` (no breaking CLI change).
+
 tarball contains `bin/raindrop.js` (a Node launcher) + `binaries/raindrop-*`
 (pre-compiled Bun binaries for linux-x64 and win32-x64). Source code, dev
 tooling, node_modules, and the Vite UI build artefacts are NOT in the tarball.
@@ -158,8 +162,8 @@ NOTES
 
 ### Post-publish
 
-- Verify with `npm view @grudanov-nikolay/opencode-workshop version`.
-- Verify the launcher end-to-end on a clean machine (or fresh shell): `npm i -g @grudanov-nikolay/opencode-workshop && raindrop workshop serve`.
+- Verify with `npm view @grudanov-nikolay/agenttrace version`.
+- Verify the launcher end-to-end on a clean machine (or fresh shell): `npm i -g @grudanov-nikolay/agenttrace && raindrop workshop serve`.
 - Move the in-flight Feature (e.g. `F-022`) from `## Active Features` to `## Closed Features` in `ai-docs/PLAN.md` with `Closed <date>`.
 - **Also update** the `## Roadmap (Tier 1, next-up)` section in `ai-docs/PLAN.md` to drop the just-shipped item and add any newly-discovered work. A stale roadmap is worse than no roadmap.
 - **Also update** the umbrella `~/workspase/projects/opencode-workshop-stack/STATUS.md` (released versions + roadmap table). This is the single artifact a fresh session reads first to know "where is this stack right now".

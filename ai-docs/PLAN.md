@@ -1,9 +1,9 @@
-# PLAN.md — opencode-workshop (Kolya's fork)
+# PLAN.md — agenttrace (Kolya's fork, formerly `opencode-workshop`)
 
 > **Single source of truth for all development work in this repo.**
 > Features at the top (newest first), each with checkboxes. Update in the same commit as the code change.
 
-## Conventions (same as opencode-workshop-plugin fork)
+## Conventions (same as opencode-workshop-plugin fork — soon to be renamed `agenttrace-opencode-plugin`)
 
 - **Feature = a vertical slice of work** (one user-visible capability, one bug fix, or one cleanup).
 - **Todo = a single atomic step** inside a Feature. Marked `- [ ]` (pending) or `- [x]` (done).
@@ -22,13 +22,56 @@ Public release is live (`v0.0.1` on npm under `latest`). Next-up items, in prior
 - **T1-C. macOS / linux-arm64 binaries** — only linux-x64 + win32-x64 ship today. Either expand `bin/raindrop.js` to support more platforms (requires cross-compile in CI on darwin host for ad-hoc signing) or document source-build as the only path. Open question: do we even own the platform set, or keep it narrow on purpose?
 - **T1-D. Build a real src/index.ts + tsup pipeline for the plugin** — currently the plugin ships only hand-edited `dist/index.{js,cjs}` (no source). This was fine for the alpha but blocks normal dev cycles (PR review, typecheck, lint, tests). Spec: feature F-002 originally. ~1-2 days.
 - **T1-E. Public-release hygiene automation** — `Makefile`-equivalent that runs pre-publish checklist + smoke test against the published tarball (not local dist) on every future `npm publish`.
-- **T1-F. F-023 — Multi-source agent instrumentation (Qwen Code + GigaCode)** — Plan-only stage. Bridge-only architecture (HTTP hooks, no OTLP): new sibling repo `openworkshop-qwen-bridge` (Node/TS) translates Qwen Code + GigaCode hook events into the OpenCode-plugin wire format and POSTs to `localhost:5899/v1/`. Workshop daemon gets minimal additions (`agent_provider` in `runs.metadata`, UI badge/facet). GigaCode adapter authored by corporate agent on Kolya's laptop against our wire contract; Qwen Code adapter authored here. Stages 0–7 estimated ~4 days. See `openspec/changes/archive/F-023-multi-source-ingestion/proposal.md`, `openspec/specs/source-aware-ingestion/spec.md`, `ai-docs/specs/F-023-multi-source-ingestion-research.md`.
+- **T1-F. F-023 — Multi-source agent instrumentation (Qwen Code + GigaCode)** — Plan-only stage. Bridge-only architecture (HTTP hooks, no OTLP): new sibling repo `agenttrace-qwen-bridge` (Node/TS, renamed from `openworkshop-qwen-bridge`) translates Qwen Code + GigaCode hook events into the OpenCode-plugin wire format and POSTs to `localhost:5899/v1/`. Workshop daemon gets minimal additions (`agent_provider` in `runs.metadata`, UI badge/facet). GigaCode adapter authored by corporate agent on Kolya's laptop against our wire contract; Qwen Code adapter authored here. Stages 0–7 estimated ~4 days. See `openspec/changes/archive/F-023-multi-source-ingestion/proposal.md`, `openspec/specs/source-aware-ingestion/spec.md`, `ai-docs/specs/F-023-multi-source-ingestion-research.md`.
 
 The plugin-side T1-D (`loadConfig` cwd bug) is also open — see `ai-docs/specs/F-011-loadconfig-cwd-bug.md`.
 
 ---
 
 ## Active Features
+
+### F-024 — Rename stack from `opencode-workshop` to `agenttrace`
+
+**Context:** As of 2026-09-17 Kolya decided to rename the entire stack away from the overloaded `workshop` name (collision with `giarld/OpenWorkshop` on npm, general term overload, no clear association with the AI-agent-trace-debugger product). New identity:
+- Daemon (this repo): `opencode-workshop` → **`agenttrace`**
+- Plugin repo: `opencode-workshop-plugin` → **`agenttrace-opencode-plugin`**
+- Bridge repo: `openworkshop-qwen-bridge` → **`agenttrace-qwen-bridge`**
+- GitHub mirrors: `nikolay-grudanov/<repo>` (same account, just renamed)
+- npm scope: `@grudanov-nikolay/<name>` (unchanged)
+
+**Files to edit in this repo:**
+- `package.json` — `name` (`opencode-workshop` → `agenttrace`), `version` (`0.0.1` → `0.1.0`), `homepage`/`bugs.url`/`repository.url`
+- `bin/raindrop.js` — comment + error message URL (CLI binary name stays `raindrop`)
+- `README.md` — install instructions, repo URLs
+- `AGENTS.md` — Publishing section, post-publish verification commands
+- `ai-docs/PLAN.md` — title, T1-F roadmap entry references `openworkshop-qwen-bridge`
+- `openspec/config.yaml` — public repo URL + companion plugin path
+- `binaries/raindrop-linux-x64` and `binaries/raindrop-windows-x64.exe` — rebuild with `RAINDROP_VERSION=0.1.0` (only if Kolya commits to a `0.1.0` publish — otherwise skip)
+
+**Out of scope (historical record, MUST NOT touch):**
+- `ai-docs/HANDOFF*.md` — historical session notes, leave as-is
+- `openspec/changes/archive/*` — closed proposals, history
+- `ai-docs/PLAN.md` lines referencing `@grudanov-nikolay/opencode-workshop` inside Closed Features (F-022 description) — this is a record of what was shipped; rewriting it would falsify history
+- `package.json:bin` — `raindrop` CLI command stays (no breaking CLI rename)
+
+**Deferred to separate Kolya-authorized steps (not part of this commit):**
+- `npm publish @grudanov-nikolay/agenttrace@0.1.0`
+- `npm deprecate @grudanov-nikolay/opencode-workshop@0.0.1`
+- `gh repo edit --rename` on `nikolay-grudanov/opencode-workshop` → `agenttrace`
+
+**Todos:**
+- [x] `package.json` — `name` + `version` + `homepage` + `bugs.url` + `repository.url`
+- [x] `bin/raindrop.js` — comment + error URL
+- [x] `README.md` — install, source-build, npm-update, plugin-link sections
+- [x] `AGENTS.md` — Publishing + Post-publish sections
+- [x] `ai-docs/PLAN.md` — title + Conventions + T1-F entry
+- [x] `openspec/config.yaml` — public repo + companion plugin path
+- [ ] `binaries/*` — rebuild with `RAINDROP_VERSION=0.1.0` (deferred until Kolya confirms `0.1.0` publish; binaries not strictly required for the rename commit — `package.json` rename alone lets a future `npm publish` carry the right name)
+- [ ] Push to `origin/main` (Kolya action)
+
+**Cross-repo commits this F-024 implies (separate commits per repo, separate push gates):**
+- plugin repo: rename `package.json` + 3-site lockstep (`dist/index.{js,cjs}` + `~/.config/opencode/plugins/opencode-workshop-plugin.js`) + version `0.0.1` → `0.1.0`
+- bridge repo: git init + rename + first push to `origin`
 
 ### F-023 — Multi-source agent instrumentation (Qwen Code + GigaCode) — Plan only
 

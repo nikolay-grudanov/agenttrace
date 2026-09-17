@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * raindrop CLI launcher — npm-distributed entry point for Kolya's fork of
- * @raindrop/workshop. Detects the user's platform/arch and spawns the matching
- * pre-compiled Bun binary from binaries/. No runtime dependency on Bun.
+ * @raindrop/workshop (now: @grudanov-nikolay/agenttrace). Detects the user's
+ * platform/arch and spawns the matching pre-compiled Bun binary from
+ * binaries/. No runtime dependency on Bun.
  *
  * Supported: linux-x64, win32-x64. Other platforms print a clear error pointing
  * the user to the GitHub repo where they can build from source.
@@ -49,7 +50,7 @@ function printPlatformError() {
       `Supported pre-built platforms: ${supported}.`,
       "",
       "Two ways forward:",
-      `  1. Open an issue at https://github.com/nikolay-grudanov/opencode-workshop/issues`,
+      `  1. Open an issue at https://github.com/nikolay-grudanov/agenttrace/issues`,
       `     requesting a build for ${key}.`,
       `  2. Build from source: clone the repo, install Bun (https://bun.sh),`,
       `     then run 'bun install && bun run dev'.`,
