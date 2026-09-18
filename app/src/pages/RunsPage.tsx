@@ -12,6 +12,7 @@ import { fetchPrices } from "../utils/costs";
 import { searchWorkshopSpans, fetchWorkshopFacets, type WorkshopSearchResult, type WorkshopFacetsResponse } from "../api/query-api";
 import { parseReplayMetadata } from "../utils/types";
 import type { Run } from "../utils/types";
+import { runDisplayName } from "../utils/helpers";
 import { useWorkshopConnected, useWorkshopMessage } from "../hooks/use-workshop-ws";
 
 const FIRST_TIME_SETUP_DISMISSED_KEY = "workshop:firstTimeSetupDismissed";
@@ -186,6 +187,7 @@ export function RunsPage() {
     if (!search.trim()) return list;
     const q = search.toLowerCase();
     return list.filter(r =>
+      runDisplayName(r).toLowerCase().includes(q) ||
       (r.event_name ?? "").toLowerCase().includes(q) ||
       (r.name ?? "").toLowerCase().includes(q) ||
       (r.user_id ?? "").toLowerCase().includes(q) ||
@@ -366,7 +368,7 @@ export function RunsPage() {
         {(replay.state !== "idle" || replay.replayRunId) && replayOriginalId
           ? (() => {
               const origRun = runs.find(r => r.id === replayOriginalId);
-              const origName = (origRun?.event_name ?? origRun?.name ?? "")?.replace(/^replay:/i, "").trim() || replayOriginalId!.slice(0, 12);
+              const origName = origRun ? runDisplayName(origRun) : replayOriginalId!.slice(0, 12);
               return <ReplayView
                 originalRunId={replayOriginalId}
                 originalName={origName}
@@ -383,7 +385,7 @@ export function RunsPage() {
                   const selectedRun = runs.find(r => r.id === selectedId);
                   const meta = selectedRun ? parseReplayMetadata(selectedRun) : null;
                   const srcRun = meta ? runs.find(r => r.id === meta.replay.sourceRunId) : null;
-                  const srcName = meta ? (srcRun?.event_name ?? srcRun?.name ?? meta.replay.sourceRunId.slice(0, 12)).replace(/^replay:/, "") : "";
+                  const srcName = meta ? (srcRun ? runDisplayName(srcRun) : meta.replay.sourceRunId.slice(0, 12)) : "";
                   return (
                     <div className="h-full flex flex-col">
                       {meta && (

@@ -1,6 +1,6 @@
 import { Star, RotateCcw } from "lucide-react";
 import { C } from "../utils/colors";
-import { ago, isActive } from "../utils/helpers";
+import { ago, isActive, runDisplayName } from "../utils/helpers";
 import { useSavedEvent } from "../api/saved-runs";
 import { parseReplayMetadata } from "../utils/types";
 import type { Run } from "../utils/types";
@@ -17,11 +17,7 @@ export function RunListItem({ run, selected, highlighted, faded, onClick }: {
   const replayMeta = parseReplayMetadata(run);
   const isReplay = !!replayMeta;
 
-  const baseName = isReplay
-    ? (run.event_name ?? "").replace(/^replay:/, "") || run.name || run.id.slice(0, 5)
-    : (run.event_name ?? "").replace(/^replay:/i, "").trim()
-      || run.name?.trim()
-      || run.id.slice(0, 5);
+  const baseName = runDisplayName(run, 5);
   const traceIdShort = run.id.slice(0, 5);
   const displayTitle = `${baseName} (${traceIdShort})`;
 

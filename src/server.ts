@@ -8,7 +8,7 @@ import { randomUUID } from "crypto";
 import { normalizeOtelId } from "./ids";
 import { parseOtlpRequest } from "./parse";
 import { decodeOtlpProtobuf } from "./otlp-protobuf";
-import { upsertRun, insertSpan, upsertEventSpan, findRunByEventId, adoptRunByEventId, getRuns, getRunWithSpans, getRunsByConvoId, getConvoStatistics, getConvoCompressions, clearAll, upsertLiveEvent, getLiveEvents, cacheSavedRun, getCachedRun, deleteCachedRun, deleteRun, getSpanMeta, getSpanById, getSpanPayloadColumn, getSpanContext, getMostRecentlyTouchedRun, getRunById, getRunOutline, listSpansFiltered, searchRun, searchSpans, computeFacets, tailLiveEvents, listSavedEvents, getSavedEvent, upsertSavedEvent, patchSavedEvent, deleteSavedEvent, listSavedFolders, ensureSavedFolder, deleteSavedFolder, queryTraces, type SavedEventRow } from "./db";
+import { upsertRun, insertSpan, upsertEventSpan, findRunByEventId, adoptRunByEventId, getRuns, getRunWithSpans, getRunsByConvoId, getConvoStatistics, getConvoCompressions, clearAll, upsertLiveEvent, getLiveEvents, cacheSavedRun, getCachedRun, deleteCachedRun, deleteRun, getSpanMeta, getSpanById, getSpanPayloadColumn, getSpanContext, getMostRecentlyTouchedRun, getRunById, getRunOutline, listSpansFiltered, searchRun, searchSpans, computeFacets, tailLiveEvents, listSavedEvents, getSavedEvent, upsertSavedEvent, patchSavedEvent, deleteSavedEvent, listSavedFolders, ensureSavedFolder, deleteSavedFolder, queryTraces, setRunDisplayName, type SavedEventRow } from "./db";
 import { sliceSpanPayload } from "./payload-slice";
 import { detectSubAgents } from "./agents";
 import { applyProviderOptions, detectProvider, getProviderBaseURL, getProviderHeaders } from "./provider-options";
@@ -1514,6 +1514,26 @@ export async function createServer(port: number) {
       }
       throw err;
     }
+  });
+
+  app.patch("/api/runs/:id", (req, res) => {
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.name !== "string") {
+      res.status(400).json({ error: "name must be a string" });
+      return;
+    }
+    const name = body.name.trim();
+    if (name.length > 200) {
+      res.status(400).json({ error: "name must be 200 characters or fewer" });
+      return;
+    }
+    if (!getRunById(req.params.id)) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    setRunDisplayName(req.params.id, name || null);
+    broadcast("spans", { runIds: [req.params.id] });
+    res.json({ ok: true });
   });
 
   app.delete("/api/runs/:id", (req, res) => {

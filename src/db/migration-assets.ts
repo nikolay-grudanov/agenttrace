@@ -5,6 +5,7 @@
 import migration0000Path from "../../drizzle/0000_massive_winter_soldier.sql" with { type: "file" };
 import migration0001Path from "../../drizzle/0001_cynical_betty_brant.sql" with { type: "file" };
 import migration0002Path from "../../drizzle/0002_fts5_spans.sql" with { type: "file" };
+import migration0003Path from "../../drizzle/0003_runs_display_name.sql" with { type: "file" };
 
 export const embeddedMigrationJournal = {
   "version": "7",
@@ -30,6 +31,13 @@ export const embeddedMigrationJournal = {
       "when": 1788609600000,
       "tag": "0002_fts5_spans",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790000000000,
+      "tag": "0003_runs_display_name",
+      "breakpoints": true
     }
   ]
 } as const;
@@ -46,5 +54,9 @@ export const embeddedMigrationFiles = [
   {
     relativePath: "0002_fts5_spans.sql",
     sourcePath: migration0002Path,
+  },
+  {
+    relativePath: "0003_runs_display_name.sql",
+    sourcePath: migration0003Path,
   },
 ] as const;

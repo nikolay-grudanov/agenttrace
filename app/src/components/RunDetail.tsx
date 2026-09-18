@@ -19,13 +19,15 @@ import { SpanTree, type SpanViewMode } from "./SpanTree";
 import { SessionTree } from "./SessionTree";
 import { ConvoDetail } from "./ConvoDetail";
 import { RemoteConvoLoader } from "../pages/SearchPage";
-import { RotateCcw, Bookmark, Pencil, ChevronDown, ArrowDown, ChevronRight, MessageCircle, SearchX } from "lucide-react";
+import { RotateCcw, Bookmark, Download, Pencil, ChevronDown, ArrowDown, ChevronRight, MessageCircle, SearchX } from "lucide-react";
 import { LocalAgentSetupCTA, SetupReplayModal } from "./LocalAgentSetupCTA";
 import { ExportButton } from "./ExportButton";
 import { C } from "../utils/colors";
-import { fmt, isActive } from "../utils/helpers";
+import { fmt, isActive, runDisplayName } from "../utils/helpers";
 import { parseReplayMetadata } from "../utils/types";
 import type { Run, Span, LiveEvent, SubAgent } from "../utils/types";
+import { useQueryClient } from "@tanstack/react-query";
+import { renameRun } from "../api/runs";
 import { saveEvent, removeSavedEvent, updateSavedEvent, isEventSaved, getSavedEvents, SavePopover, type SavedAnnotationPreview, type SavedEvent } from "../pages/SavedPage";
 import { parseMessages } from "./MessageList";
 import { StatsTable, StatsRow, StatsLabel, StatsValue, StatsCaption } from "./StatsTable";
@@ -613,7 +615,7 @@ function annotationToSavedPreview(annotation: Annotation): SavedAnnotationPrevie
 
 function ViewHeader({
   title, model, active, stats, allSpans, startedAt, anthropicModels,
-  run, source, isReplay, breadcrumb, fork, onAnnotateRun, deleteRedirectPath,
+  run, source, isReplay, breadcrumb, fork, onAnnotateRun, onDownload, deleteRedirectPath,
 }: {
   title: string;
   model?: string | null;
@@ -631,6 +633,7 @@ function ViewHeader({
     userMessage?: string;
   };
   onAnnotateRun?: (input: { kind: AnnotationKind; note: string }) => Promise<Annotation | null>;
+  onDownload?: () => void;
   deleteRedirectPath?: string;
 }) {
   const onBack = breadcrumb?.onBack;
@@ -638,6 +641,7 @@ function ViewHeader({
   const ancestors = breadcrumb?.ancestors;
   const onFork = fork?.onFork;
   const userMessage = fork?.userMessage;
+  const queryClient = useQueryClient();
   const replayMeta = run ? parseReplayMetadata(run) : null;
   const traceModelFromMetadata = replayMeta?.replay?.model ?? null;
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -692,6 +696,15 @@ function ViewHeader({
     metadataModel: traceModelFromMetadata,
     anthropicModels,
   }), [forkModel, model, traceModelFromMetadata, anthropicModels]);
+  const handleRename = useCallback((name: string) => {
+    if (!run) return;
+    renameRun(run.id, name)
+      .then(() => Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["runs"] }),
+        queryClient.invalidateQueries({ queryKey: ["run-detail", run.id] }),
+      ]))
+      .catch(() => {});
+  }, [queryClient, run]);
 
   useEffect(() => {
     if (!optionsOpen || !run?.id || !agentConfigured) return;
@@ -768,7 +781,7 @@ function ViewHeader({
               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${active ? "pulse-dot" : ""}`} style={{ background: active ? C.green : "rgba(255,255,255,0.18)" }} title={active ? "Active" : "Done"} />
               {onFork && !active ? (
                 <InlineEdit value={displayTitle}
-                  onConfirm={() => {}}
+                  onConfirm={handleRename}
                   className="text-[15px] font-semibold truncate" style={{ color: C.fg4 }}
                   inputStyle={{ fontSize: 15, fontWeight: 600, color: C.fg4 }} />
               ) : (
@@ -816,6 +829,17 @@ function ViewHeader({
                   <MessageCircle className="h-3 w-3" />
                   Debug
                 </button>
+                {onDownload && (
+                  <button
+                    className="flex items-center gap-1.5 text-[11px] px-3 py-1 rounded-md font-medium transition-colors hover:bg-white/10"
+                    style={{ color: C.fg3, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+                    onClick={onDownload}
+                    title="Download trace as JSON"
+                  >
+                    <Download className="h-3 w-3" />
+                    Download
+                  </button>
+                )}
                 <button
                   ref={saveBtnRef}
                   className="flex items-center gap-1.5 text-[11px] px-3 py-1 rounded-md font-medium transition-colors"
@@ -1475,7 +1499,7 @@ export function RunDetail({ runId, routeBase, initialData, isReplay, source, onF
     const effectiveAgentTab = agentTab === "sessions" && childAgents.length === 0 ? "chat" : agentTab;
 
     const agentLabel = (a: SubAgent) => (a.subagent_name ? `${a.name}: ${a.subagent_name}` : a.name);
-    const runLabel = run.event_name ?? run.name ?? run.id.slice(0, 12);
+    const runLabel = runDisplayName(run);
     const chainAgents = focusStack
       .slice(0, -1)
       .map(id => subAgents.find(a => a.root_span_id === id))
@@ -1545,6 +1569,16 @@ export function RunDetail({ runId, routeBase, initialData, isReplay, source, onF
   const errs = spans.filter(s => s.status === "ERROR");
   const dur = run.last_updated_at - run.started_at;
   const model = spans.find(s => s.model)?.model;
+  const downloadTrace = () => {
+    const url = URL.createObjectURL(new Blob([
+      JSON.stringify({ ...data, liveEvents }, null, 2),
+    ], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `trace-${run.id}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const tabStyle = (k: string) => ({
     padding: "8px 12px", fontSize: "12px", fontWeight: 500, cursor: "pointer" as const,
@@ -1556,7 +1590,7 @@ export function RunDetail({ runId, routeBase, initialData, isReplay, source, onF
   return (
     <div className="h-full flex flex-col">
       <ViewHeader
-        title={run.event_name ?? run.name ?? run.id.slice(0, 12)}
+        title={runDisplayName(run)}
         model={model}
         active={active}
         startedAt={run.started_at}
@@ -1573,6 +1607,7 @@ export function RunDetail({ runId, routeBase, initialData, isReplay, source, onF
         isReplay={isReplay}
         deleteRedirectPath={routeBase ?? "/runs"}
         onAnnotateRun={(input) => createAnnotationAndSave({ ...input, source: "user" })}
+        onDownload={downloadTrace}
         fork={onForkStarted ? {
           onFork: (msg, mode, mdl, ctx) => onForkStarted(runId, msg, mode, mdl, ctx),
           userMessage: lastUserMessage,

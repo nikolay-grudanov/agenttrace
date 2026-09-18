@@ -176,6 +176,7 @@ export function buildCloudRun(event: QueryEvent, spans: Span[]): Run {
     id: event.id,
     name: null,
     event_name: event.event_name,
+    display_name: null,
     user_id: event.user_id,
     convo_id: event.convo_id,
     started_at: startMs,

@@ -2,6 +2,7 @@ export interface Run {
   id: string;
   name: string | null;
   event_name: string | null;
+  display_name: string | null;
   user_id: string | null;
   convo_id: string | null;
   started_at: number;

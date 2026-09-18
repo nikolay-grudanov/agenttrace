@@ -35,6 +35,10 @@ export async function deleteRun(runId: string): Promise<void> {
   await apiJson(`/api/runs/${encodeURIComponent(runId)}`, jsonInit("DELETE"));
 }
 
+export async function renameRun(runId: string, name: string): Promise<void> {
+  await apiJson(`/api/runs/${encodeURIComponent(runId)}`, jsonInit("PATCH", { name }));
+}
+
 export async function clearRuns(): Promise<void> {
   await apiJson("/api/clear", jsonInit("POST"));
 }

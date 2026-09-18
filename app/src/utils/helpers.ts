@@ -41,6 +41,16 @@ export function tryJson(s: string | null | undefined): string | null {
   catch { return s; }
 }
 
+export function runDisplayName(
+  run: { id: string; display_name?: string | null; event_name: string | null; name: string | null },
+  fallbackLength = 12,
+): string {
+  return run.display_name?.trim()
+    || run.event_name?.replace(/^replay:/i, "")
+    || run.name?.trim()
+    || run.id.slice(0, fallbackLength);
+}
+
 /**
  * Compact one-line summary of an args object for inline pills, e.g.
  * `query: "search…", limit: 10`. Accepts a JSON string or a parsed value.

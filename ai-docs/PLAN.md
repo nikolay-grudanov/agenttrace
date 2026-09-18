@@ -55,6 +55,8 @@ The plugin-side T1-D (`loadConfig` cwd bug) is also open — see `ai-docs/specs/
 
 **Out of scope:** upstream's `examples/anthropic-chat/`, `examples/claude-agent-sdk/`, `app/tests-e2e/{anthropic-chat,claude-agent-sdk}.spec.ts` — these are Cloud-era tests we don't run; F-002 is removing the Claude/Codex surface.
 
+**Closed 2026-09-18** — upstream parity from v0.1.20 (Download trace JSON) and v0.1.21 (Rename run). `drizzle/0003_runs_display_name.sql` (idx 3, since our `0002_fts5_spans` already occupies idx 2), `setRunDisplayName()` helper in `src/db.ts` + `display_name` COALESCE in `adoptRunByEventId`, `PATCH /api/runs/:id` route in `src/server.ts` (validates name: string ≤200 chars, broadcasts `spans` WS event), `renameRun()` client in `app/src/api/runs.ts`, `runDisplayName()` helper in `app/src/utils/helpers.ts` (display_name > event_name > name > id slice), `Run.display_name: string | null` in `app/src/utils/types.ts`, Download button in `RunDetail.tsx:ViewHeader` (hidden when `onDownload` absent), inline rename via existing `InlineEdit` on the title (F-028 uses the existing click-to-edit UX instead of a separate Rename button — matches upstream). Search/run-list/saved-event sites use `runDisplayName()`. `bun x tsc --noEmit && bun run lint && bun run test && bun run build:ui` all green. Manual smoke deferred to Kolya per the "no daemon restart by the assistant" hard rule.
+
 ---
 
 ### F-025 — Rename CLI command `raindrop` → `agenttrace` (and CLI surface cleanup)

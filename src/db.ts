@@ -295,6 +295,7 @@ export function adoptRunByEventId(eventId: string, newRunId: string): boolean {
         SET
           name = COALESCE(runs.name, source.name),
           event_name = COALESCE(runs.event_name, source.event_name),
+          display_name = COALESCE(runs.display_name, source.display_name),
           user_id = COALESCE(runs.user_id, source.user_id),
           convo_id = COALESCE(runs.convo_id, source.convo_id),
           started_at = MIN(runs.started_at, source.started_at),
@@ -314,6 +315,10 @@ export function adoptRunByEventId(eventId: string, newRunId: string): boolean {
 
 export function updateRunMetadata(runId: string, metadata: string) {
   getDrizzleDb().update(schema.runs).set({ metadata }).where(eq(schema.runs.id, runId)).run();
+}
+
+export function setRunDisplayName(runId: string, displayName: string | null) {
+  getDrizzleDb().update(schema.runs).set({ display_name: displayName }).where(eq(schema.runs.id, runId)).run();
 }
 
 export function findRecentRunByEventName(eventName: string, afterTimestamp: number, excludeId?: string): any {
