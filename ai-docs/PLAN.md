@@ -17,7 +17,7 @@
 
 Public release is live (`v0.0.1` on npm under `latest`). Next-up items, in priority order:
 
-- **T1-A. Sync upstream `raindrop-ai/workshop` v0.1.21** — we're 8 commits behind upstream; their changes include a `display_name` column on runs (DB migration conflict — our `0002_fts5_spans` already occupies idx 2, theirs is `0002_flowery_shinobi_shaw`). Resolution plan: rename our FTS5 migration to `0003` with a migration-safety check (don't re-run if `spans_fts` already exists), then merge upstream. ~2-3 hours.
+- **T1-A. Sync upstream `raindrop-ai/workshop` v0.1.21** — we're 8 commits behind upstream. Decided to scope three Features instead of one big merge: F-026 (CSP + `RAINDROP_WORKSHOP_ALLOWED_HOSTS`, v0.1.16 + v0.1.17 hardening), F-027 (OTLP `gen_ai.usage.prompt_tokens` / `completion_tokens` aliases, v0.1.17), F-028 (rename run + Download trace JSON, v0.1.20 + v0.1.21; migration `0002_flowery_shinobi_shaw` → our `0003_runs_display_name.sql` because our `0002_fts5_spans` already occupies idx 2). Skipped: image content parts (v0.1.18, reverted+re-shipped — wait for upstream to settle), Cloud removal already done locally (F-001), Claude/Codex surface excluded by F-002. ~3-4 hours.
 - **T1-B. Git LFS for binaries** — current `binaries/raindrop-linux-x64` (79 MB) and `raindrop-windows-x64.exe` (99 MB) trigger GitHub "large file" warning on every push. Migrating to LFS silences the warning and speeds up `git clone`. ~1 hour.
 - **T1-C. macOS / linux-arm64 binaries** — only linux-x64 + win32-x64 ship today. Either expand `bin/raindrop.js` to support more platforms (requires cross-compile in CI on darwin host for ad-hoc signing) or document source-build as the only path. Open question: do we even own the platform set, or keep it narrow on purpose?
 - **T1-D. Build a real src/index.ts + tsup pipeline for the plugin** — currently the plugin ships only hand-edited `dist/index.{js,cjs}` (no source). This was fine for the alpha but blocks normal dev cycles (PR review, typecheck, lint, tests). Spec: feature F-002 originally. ~1-2 days.
@@ -30,6 +30,55 @@ The plugin-side T1-D (`loadConfig` cwd bug) is also open — see `ai-docs/specs/
 ---
 
 ## Active Features
+
+### F-026 — Hardening security pass (CSP + allow-list for container/host.docker.internal access)
+
+**Context:** upstream `raindrop-ai/workshop` v0.1.16 + v0.1.17 added two complementary hardening changes that we currently lack on our fork (merge-base `914d74d`, v0.1.15):
+
+1. **Clickjacking protection** (v0.1.17, `10f2161`): `Content-Security-Policy: frame-ancestors 'none'` + `X-Frame-Options: DENY` middleware in `src/server.ts:createServer`. Workshop UI has actions that can launch local agents; a remote page framing it is a real attack surface.
+2. **Opt-in network allow-list** (v0.1.16, `d46bcef`): new env-vars `RAINDROP_WORKSHOP_ALLOWED_HOSTS` (comma-separated extra Host/Origin hostnames, e.g. `host.docker.internal:5899`) paired with `isPrivateRemoteAddress` / `parseAllowedHostsEnv` / `hostnameOnly` in `src/local-access.ts`. When the allow-list is non-empty, the loopback-only socket guard downgrades to RFC1918 + IPv6 ULA ranges so Docker bridge / `host.docker.internal` / local VMs can reach the daemon. Empty by default — Workshop stays loopback-only unless the operator opts in.
+
+We already have `RAINDROP_WORKSHOP_BIND_HOST` in `src/index.ts:58` (binds the listen socket) — F-026 is the **server-side gate** side of the same feature (which hostname/Origin we accept on inbound HTTP).
+
+**Why:** clicking chat traces usually runs on `localhost` only; the two upstream patches close (a) a UI-security hole and (b) a real friction point for containerized dev setups. Both are tiny diffs and unrelated to Cloud.
+
+**Acceptance criteria:**
+
+- [ ] Add `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` headers on every response from `createServer()` (covers UI HTML, API JSON, WebSocket upgrade response).
+- [ ] Add `isPrivateRemoteAddress(address)`, `parseAllowedHostsEnv(value)`, `hostnameOnly(host)` to `src/local-access.ts` (verbatim port from upstream, RFC1918: 10/8, 172.16/12, 192.168/16, 169.254/16; IPv6: fc00::/7, fe80::/10).
+- [ ] `RAINDROP_WORKSHOP_ALLOWED_HOSTS` env-var: when non-empty, also accept non-loopback private source IPs at the socket layer; `isAllowedLocalAccess` consults the allow-list for `Host` + `Origin` hostnames (case-insensitive, tolerates URL-shaped entries).
+- [ ] Update `src/index.ts` ENVIRONMENT docblock with both new vars.
+- [ ] `bun x tsc --noEmit` exits 0; `bun run lint` exits 0; `bun run test` passes.
+- [ ] Manual smoke: `curl -i http://127.0.0.1:5899/` returns both security headers; with `RAINDROP_WORKSHOP_ALLOWED_HOSTS=foo.local` set, a request with `Host: foo.local` from a 172.17.0.1 source is accepted; without it, the same request is rejected with 403.
+
+**Files to edit:** `src/server.ts` (security middleware + allow-list wiring), `src/local-access.ts` (3 new functions), `src/index.ts` (ENV docblock).
+
+**Out of scope:** Cloud (`src/cloud/*`) — we already removed it in F-001.
+
+### F-028 — Rename run + Download trace as JSON
+
+**Context:** upstream `v0.1.21` (`a6b82d7`) and `v0.1.20` (`3c49367`) ship two UI features that operate on the same `RunDetail` / `RunList` / `RunsPage` / `SavedPage` / `SearchPage` chrome. Doing them as one fork Feature avoids touching the same files twice.
+
+1. **Rename run** (v0.1.21): PATCH `/api/runs/:id` accepting `{ name: string }`. Persists to a new `runs.display_name` column (nullable TEXT, max 200 chars). DB migration `0002_flowery_shinobi_shaw.sql` upstream — **we must rename it** because our `0002_fts5_spans.sql` already occupies idx 2. Plan: upstream's becomes `0003_runs_display_name.sql` in our fork. Schema additions: `runs.display_name` and `runs_with_hints.display_name` view column. New helpers: `setRunDisplayName` in `src/db.ts`. `display_name` is carried through `adoptRunByEventId` so re-attached spans keep the user-given name.
+2. **Download trace as JSON** (v0.1.20): `Download` button in `ViewHeader` (`app/src/components/RunDetail.tsx`) that serializes the current `{...data, liveEvents}` to a `Blob` and triggers a `trace-${run.id}.json` download.
+
+**Acceptance criteria:**
+
+- [ ] New migration `drizzle/0003_runs_display_name.sql` (`ALTER TABLE runs ADD display_name text;`) + corresponding entry in `drizzle/meta/_journal.json` and `src/db/migration-assets.ts` (`embeddedMigrationJournal` + `embeddedMigrationFiles`).
+- [ ] `runs.display_name` and `runs_with_hints.display_name` added in `src/db/schema.ts`. `setRunDisplayName(runId, name)` helper in `src/db.ts`. `adoptRunByEventId` carries `display_name` via `COALESCE`.
+- [ ] `PATCH /api/runs/:id` route in `src/server.ts` validates `name: string`, `name.length <= 200`, returns 400 / 404 / 200, broadcasts `spans` event for WS subscribers.
+- [ ] Client: `renameRun(runId, name)` in `app/src/api/runs.ts`; rename UI control wired into `RunDetail` / `RunList` / `RunsPage` / `SavedPage` / `SearchPage` (wherever the run name is displayed).
+- [ ] `Download` button in `app/src/components/RunDetail.tsx:ViewHeader`, hidden when `onDownload` is not provided (i.e. read-only views). Triggers `trace-${run.id}.json` download of `{...runData, liveEvents}`.
+- [ ] `bun x tsc --noEmit && bun run lint && bun run test && bun run build:ui` all pass.
+- [ ] Manual smoke: open a run in the UI, click Download → file `trace-<id>.json` downloads; rename a run via UI → new name persists across reload + shows in sidebar list.
+
+**Files to edit:** `src/db/schema.ts`, `src/db.ts`, `src/server.ts`, `src/db/migration-assets.ts`, `drizzle/0003_runs_display_name.sql`, `drizzle/meta/_journal.json`, `app/src/api/runs.ts`, `app/src/components/RunDetail.tsx`, `app/src/components/RunList.tsx`, `app/src/pages/RunsPage.tsx`, `app/src/pages/SavedPage.tsx`, `app/src/pages/SearchPage.tsx`, `app/src/api/query-api.ts`, `app/src/utils/helpers.ts`, `app/src/utils/types.ts`.
+
+**Migration safety note:** our `0002_fts5_spans.sql` already occupies idx 2. The renamed upstream migration becomes `0003_runs_display_name.sql` with idx 3 in `_journal.json`. No backfill needed (column is nullable).
+
+**Out of scope:** upstream's `examples/anthropic-chat/`, `examples/claude-agent-sdk/`, `app/tests-e2e/{anthropic-chat,claude-agent-sdk}.spec.ts` — these are Cloud-era tests we don't run; F-002 is removing the Claude/Codex surface.
+
+---
 
 ### F-025 — Rename CLI command `raindrop` → `agenttrace` (and CLI surface cleanup)
 
@@ -666,6 +715,34 @@ This feature ships the workshop-side of that contract: the bridge sets those env
 - npm tarball contains only `bin/`, `binaries/`, and docs — no source code, no dev deps. To run dev mode (hot reload), clone the repo.
 
 **Commits:** `6a9ee0e chore(F-022): first public alpha 0.0.1 — npm package @grudanov-nikolay/opencode-workshop`, `09ad325 chore(F-022): rebuild binaries with RAINDROP_VERSION=0.0.1 (drop -local suffix)`. Pushed to `origin/main`, tag `v0.0.1`.
+
+### F-027 — OTLP token-naming expansion (gen_ai.usage.prompt_tokens / completion_tokens) — Closed 2026-09-18
+
+**Context:** upstream `v0.1.17` (`10f2161`) added two more `first(...)` aliases for AI-token attributes in `src/parse.ts:parseOtlpRequest`:
+
+- `gen_ai.usage.prompt_tokens` (in addition to existing `ai.usage.inputTokens`, `ai.usage.promptTokens`, `ai.usage.prompt_tokens`, `gen_ai.usage.input_tokens`)
+- `gen_ai.usage.completion_tokens` (in addition to existing `ai.usage.outputTokens`, `ai.usage.completionTokens`, `ai.usage.completion_tokens`, `gen_ai.usage.output_tokens`)
+
+Some GenAI instrumentation libraries use the bare `prompt_tokens` / `completion_tokens` form (Google ADK, parts of OpenLLMetry, etc.). Without these aliases their token counts silently land as `0` in our span tables and break cost calculations / stats panels downstream.
+
+**Result:** parser now accepts the bare-form aliases. Token counts from Google-ADK-style instrumentation now reach the runs table instead of silently defaulting to `0`.
+
+**What shipped:**
+
+- `src/parse.ts:210-211` — `first(...)` chain for `inputTokens` / `outputTokens` extended with `gen_ai.usage.prompt_tokens` and `gen_ai.usage.completion_tokens` (appended LAST, so legacy `_input_tokens` / `_output_tokens` precedence is unchanged for SDKs already using the long form).
+- `tests/parse.test.ts` — new file, 3 tests:
+  - acceptance: `gen_ai.usage.prompt_tokens=42` / `completion_tokens=17` → `input_tokens: 42` / `output_tokens: 17`
+  - legacy `gen_ai.usage.input_tokens` / `output_tokens` still resolve (regression guard)
+  - legacy attribute wins when both legacy and new alias are present on the same span (precedence guard — matches upstream `first(...)` ordering)
+
+**Verified (2026-09-18):**
+
+- `./node_modules/.bin/tsc --noEmit` → 0 errors
+- `bun test tests/parse.test.ts` → 3 pass / 0 fail
+- `bun test tests/` → 111 pass / 0 fail (no regressions across the suite)
+- `./node_modules/.bin/eslint src/parse.ts tests/parse.test.ts` → 0 warnings
+
+**Out of scope (re-affirmed):** any UI changes — this is purely a parser widening; downstream consumers (`StatsPanel`, cost calc, FTS facet) read the `input_tokens` / `output_tokens` columns already populated by the parser.
 
 ---
 
