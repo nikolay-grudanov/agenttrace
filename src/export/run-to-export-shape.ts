@@ -64,7 +64,19 @@ export async function loadExportShape(runId: string): Promise<ExportShape> {
   }
 
   return {
-    title: String(runAny.name ?? runId.slice(0, 8)),
+    title: String(
+      // F-028: a user-given `display_name` (set via PATCH /api/runs/:id)
+      // wins; otherwise the upstream `name`; otherwise a short id slice.
+      // Mirrors `runDisplayTitle()` in the React UI so the exported HTML
+      // matches what the user sees in the sidebar.
+      (typeof runAny.display_name === "string" && runAny.display_name.trim()
+        ? runAny.display_name
+        : null) ??
+        (typeof runAny.name === "string" && runAny.name.trim() ? runAny.name : null) ??
+        runId.slice(0, 8),
+    ),
+    display_name: typeof runAny.display_name === "string" ? runAny.display_name : null,
+    event_name: typeof runAny.event_name === "string" ? runAny.event_name : null,
     model,
     provider,
     createdAt: startedAt,

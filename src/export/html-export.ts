@@ -2,6 +2,13 @@ import MarkdownIt from "markdown-it";
 
 export interface ExportShape {
   title: string;
+  /** F-028: a user-given display name set via PATCH /api/runs/:id; may be
+   * the same as `title` (we already used it there) but kept separately so
+   * downstream tools can tell "user renamed this" from "the run was always
+   * called that". */
+  display_name?: string | null;
+  /** Original upstream agent name (e.g. `code-agent`, `agent.turn`). */
+  event_name?: string | null;
   model?: string;
   provider?: string;
   createdAt: number;
@@ -205,6 +212,19 @@ export function renderSessionHtml(
     : "";
 
   const htmlClass = theme === "dark" ? ' class="dark"' : "";
+  // F-028: when a user renamed the run, surface that explicitly next to the
+  // upstream event_name so the export is honest about both. Skip either line
+  // when missing/identical to the title.
+  const displayName = exportShape.display_name?.trim();
+  const eventName = exportShape.event_name?.trim();
+  const showDisplayName =
+    displayName && displayName !== exportShape.title
+      ? `<div class="meta">Renamed: ${escapeHtml(displayName)}</div>`
+      : "";
+  const showEventName =
+    eventName && eventName !== exportShape.title && eventName !== displayName
+      ? `<div class="meta">Agent: ${escapeHtml(eventName)}</div>`
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="en"${htmlClass}>
@@ -217,6 +237,7 @@ export function renderSessionHtml(
 <body>
 <header>
 <h1>${title}</h1>
+${showDisplayName}${showEventName}
 <div class="meta">
 ${model ? `Model: ${model}` : ""}${model && provider ? " · " : ""}${provider ? `Provider: ${provider}` : ""}${model || provider ? " · " : ""}Created: ${created}${created !== updated ? ` · Updated: ${updated}` : ""}
 </div>
