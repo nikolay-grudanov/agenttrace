@@ -46,7 +46,7 @@ export function runDisplayName(
   fallbackLength = 12,
 ): string {
   return run.display_name?.trim()
-    || run.event_name?.replace(/^replay:/i, "")
+    || run.event_name?.replace(/^replay:/i, "").trim()
     || run.name?.trim()
     || run.id.slice(0, fallbackLength);
 }
