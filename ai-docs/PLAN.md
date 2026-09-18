@@ -31,29 +31,6 @@ The plugin-side T1-D (`loadConfig` cwd bug) is also open — see `ai-docs/specs/
 
 ## Active Features
 
-### F-026 — Hardening security pass (CSP + allow-list for container/host.docker.internal access)
-
-**Context:** upstream `raindrop-ai/workshop` v0.1.16 + v0.1.17 added two complementary hardening changes that we currently lack on our fork (merge-base `914d74d`, v0.1.15):
-
-1. **Clickjacking protection** (v0.1.17, `10f2161`): `Content-Security-Policy: frame-ancestors 'none'` + `X-Frame-Options: DENY` middleware in `src/server.ts:createServer`. Workshop UI has actions that can launch local agents; a remote page framing it is a real attack surface.
-2. **Opt-in network allow-list** (v0.1.16, `d46bcef`): new env-vars `RAINDROP_WORKSHOP_ALLOWED_HOSTS` (comma-separated extra Host/Origin hostnames, e.g. `host.docker.internal:5899`) paired with `isPrivateRemoteAddress` / `parseAllowedHostsEnv` / `hostnameOnly` in `src/local-access.ts`. When the allow-list is non-empty, the loopback-only socket guard downgrades to RFC1918 + IPv6 ULA ranges so Docker bridge / `host.docker.internal` / local VMs can reach the daemon. Empty by default — Workshop stays loopback-only unless the operator opts in.
-
-We already have `RAINDROP_WORKSHOP_BIND_HOST` in `src/index.ts:58` (binds the listen socket) — F-026 is the **server-side gate** side of the same feature (which hostname/Origin we accept on inbound HTTP).
-
-**Why:** clicking chat traces usually runs on `localhost` only; the two upstream patches close (a) a UI-security hole and (b) a real friction point for containerized dev setups. Both are tiny diffs and unrelated to Cloud.
-
-**Acceptance criteria:**
-
-- [ ] Add `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` headers on every response from `createServer()` (covers UI HTML, API JSON, WebSocket upgrade response).
-- [ ] Add `isPrivateRemoteAddress(address)`, `parseAllowedHostsEnv(value)`, `hostnameOnly(host)` to `src/local-access.ts` (verbatim port from upstream, RFC1918: 10/8, 172.16/12, 192.168/16, 169.254/16; IPv6: fc00::/7, fe80::/10).
-- [ ] `RAINDROP_WORKSHOP_ALLOWED_HOSTS` env-var: when non-empty, also accept non-loopback private source IPs at the socket layer; `isAllowedLocalAccess` consults the allow-list for `Host` + `Origin` hostnames (case-insensitive, tolerates URL-shaped entries).
-- [ ] Update `src/index.ts` ENVIRONMENT docblock with both new vars.
-- [ ] `bun x tsc --noEmit` exits 0; `bun run lint` exits 0; `bun run test` passes.
-- [ ] Manual smoke: `curl -i http://127.0.0.1:5899/` returns both security headers; with `RAINDROP_WORKSHOP_ALLOWED_HOSTS=foo.local` set, a request with `Host: foo.local` from a 172.17.0.1 source is accepted; without it, the same request is rejected with 403.
-
-**Files to edit:** `src/server.ts` (security middleware + allow-list wiring), `src/local-access.ts` (3 new functions), `src/index.ts` (ENV docblock).
-
-**Out of scope:** Cloud (`src/cloud/*`) — we already removed it in F-001.
 
 ### F-028 — Rename run + Download trace as JSON
 
@@ -747,3 +724,39 @@ Some GenAI instrumentation libraries use the bare `prompt_tokens` / `completion_
 ---
 
 *Maintained by Miko (Hermes Agent) under Kolya's direction. Update in the same commit as the code change.*
+
+### F-026 — Hardening security pass (CSP + allow-list for container/host.docker.internal access) — Closed 2026-09-18
+
+**Context:** Upstream `raindrop-ai/workshop` v0.1.16 (`d46bcef`) and v0.1.17 (`10f2161`) shipped two complementary hardening changes — CSP/X-Frame-Options clickjacking protection and an opt-in `RAINDROP_WORKSHOP_ALLOWED_HOSTS` env-var that lets Docker bridge / `host.docker.internal` / local VMs reach the daemon. Both landed in our fork via F-026.
+
+**Result:** Source-level changes landed; the running compiled binary on `:5899` will only reflect them after Kolya rebuilds + restarts.
+
+**What shipped:**
+
+- `src/local-access.ts` — added three helpers (verbatim from upstream):
+  - `isPrivateRemoteAddress(address)` — true for loopback plus RFC1918 (10/8, 172.16/12, 192.168/16), IPv4 link-local (169.254/16), IPv6 unique-local (fc00::/7), and IPv6 link-local (fe80::/10). IPv4-mapped IPv6 (`::ffff:172.17.0.1`) is handled.
+  - `parseAllowedHostsEnv(value)` — comma-separated env-var parser; tolerates `host:port` and full-URL entries (URLs are reduced to the hostname via `new URL(...).hostname`); lowercases entries; drops unparseable URLs (so a typo can't leave the allowlist non-empty and silently flip on private-network access).
+  - `hostnameOnly(host)` — strips `[brackets]:port` from IPv6 Host headers and `host:port` from IPv4 Host headers, but does NOT split bare IPv6 addresses (which contain multiple colons).
+- `src/server.ts` — wired the gate in three places (all in `createServer`):
+  1. New middleware right after `http.createServer(app)` sets `Content-Security-Policy: frame-ancestors 'none'` + `X-Frame-Options: DENY` on every response (HTML, API JSON, WS upgrade — Express runs this middleware before any route or other middleware).
+  2. `parseAllowedHostsEnv(process.env.RAINDROP_WORKSHOP_ALLOWED_HOSTS)` produces an `allowedHosts: Set<string>`; `isAllowedRemoteAddress` switches between `isPrivateRemoteAddress` (when allow-list non-empty) and `isLoopbackRemoteAddress` (default loopback-only). The WebSocket `verifyClient` and the socket-layer `app.use((req, res, next) => isAllowedRemoteAddress(...))` both consult this.
+  3. `isAllowedLocalAccess` / `allowedIngestCorsOrigin` now accept the `allowedHosts` set; both the ingest-path CORS middleware and the cross-origin middleware pass it through. The helper `isAllowedLocalHostname` was generalized to also match `allowedHosts` entries (case-insensitive on lookup via `.toLowerCase()`).
+- `src/index.ts` — ENVIRONMENT docblock updated to document `RAINDROP_WORKSHOP_BIND_HOST` (already supported in code, never documented) and the new `RAINDROP_WORKSHOP_ALLOWED_HOSTS` with the recommended `host.docker.internal` example.
+- `tests/local-access.test.ts` — new file, 23 tests covering all 4 helpers: loopback narrowness (rejects RFC1918 by default), private-range coverage (IPv4 + IPv4-mapped + IPv6 ULA + link-local boundary cases), allow-list parsing (empty / bare / `host:port` / full-URL / mixed / case-insensitive lookup via lowercase normalization), and hostname parsing (bare IPv4, IPv4:port, bracketed IPv6:port, bare unbracketed IPv6).
+
+**Verified (2026-09-18):**
+
+- `./node_modules/.bin/tsc --noEmit` → 0 errors
+- `bun test tests/local-access.test.ts` → 23 pass / 0 fail
+- `bun test tests/` → 134 pass / 0 fail (was 111 before; +23 from new file)
+- `bun run lint` → same 16 pre-existing errors as `main` (`bin/raindrop.js` `require/process/__dirname` undefs, `app/src/hooks/use-agents.ts` exhaustive-deps warning) — **0 new errors from F-026**
+- Source-mode smoke (sandbox daemon on a free port, not the live `:5899`):
+  - `GET /` and `GET /health` both return `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`
+  - With `RAINDROP_WORKSHOP_ALLOWED_HOSTS=""` (default): `Host: 127.0.0.1` → 200; `Host: foo.local` → 403
+  - With `RAINDROP_WORKSHOP_ALLOWED_HOSTS=foo.local`: `Host: foo.local` → 200; `Host: bar.local` → 403
+  - With `RAINDROP_WORKSHOP_ALLOWED_HOSTS=host.docker.internal:5899`: `Host: host.docker.internal:5899` → 200 (port stripped from allow-list entry)
+
+**Live-daemon smoke deferred to Kolya** — per the hard rule "no daemon restart by the assistant", `curl -i http://127.0.0.1:5899/` against the currently-running compiled binary will still lack the new headers until Kolya rebuilds (`bun run build:bun:stage`) and restarts (`raindrop workshop restart` or via tmux `workshop-fork` session). Source-level wiring is verified; the live binary is the only thing left.
+
+**Out of scope (re-affirmed):** Cloud (`src/cloud/*`) — we already removed it in F-001. UI changes — none needed; the headers are sent before any route runs.
+
