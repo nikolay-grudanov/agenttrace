@@ -50,13 +50,6 @@ export async function getAgentStatus(): Promise<{ connected: boolean; cwd?: stri
 }
 
 export async function getAgentConnectionStatus(): Promise<AgentConnectionStatus> {
-  const body = await apiJsonOrNull<{ agent?: AgentConnectionStatus; claude_code?: AgentConnectionStatus }>("/api/status");
-  return body?.agent ?? body?.claude_code ?? { state: "gray" };
-}
-
-export async function getAnthropicModels(): Promise<string[]> {
-  const body = await apiJsonOrNull<{ models?: unknown[] }>("/api/models/anthropic");
-  return Array.isArray(body?.models)
-    ? body.models.filter((model): model is string => typeof model === "string")
-    : [];
+  const body = await apiJsonOrNull<{ agent?: AgentConnectionStatus }>("/api/status");
+  return body?.agent ?? { state: "gray" };
 }

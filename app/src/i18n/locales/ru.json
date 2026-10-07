@@ -125,18 +125,12 @@
     "offline": "Оффлайн",
     "agentNamePlaceholder": "agent-name",
     "replayUrlPlaceholder": "http://localhost:5860/replay",
-    "anthropicPlaceholder": "sk-ant-...",
     "openAiPlaceholder": "sk-...",
-    "raindropPlaceholder": "rk_...",
     "queryPlaceholder": "ваш-query-api-key",
     "apiKeysDescription": "Ключи отправляются в локальный демон один раз и никогда не возвращаются в браузер. Вставьте новый ключ, чтобы заменить сохранённый.",
-    "anthropicDescription": "Используется для replay и чата Ask.",
     "openAiDescription": "Используется для replay с моделями GPT.",
-    "raindropDescription": "Write-key для отправки трассировок.",
     "queryDescription": "Ключ для поиска событий во вкладке Search.",
-    "debugDescription": "Инструменты для сброса локального состояния чата.",
-    "raindropCloudMcp": "Raindrop Cloud MCP",
-    "claudeCodeOnboarding": "Claude Code чат — онбординг"
+    "debugDescription": "Инструменты для сброса локального состояния чата."
   },
   "run": {
     "overview": "Обзор",

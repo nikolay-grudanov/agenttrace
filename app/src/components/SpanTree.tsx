@@ -206,7 +206,7 @@ interface SpanTreeProps {
   annotations?: Annotation[];
   freshIds?: Set<string>;
   onClearFresh?: (id: string) => void;
-  onCreateAnnotation?: (input: { span_id?: string | null; kind: AnnotationKind; note?: string; source?: "user" | "claude-code" }) => Promise<Annotation | null>;
+  onCreateAnnotation?: (input: { span_id?: string | null; kind: AnnotationKind; note?: string; source?: "user" | "opencode" }) => Promise<Annotation | null>;
   onDeleteAnnotation?: (id: string) => Promise<void>;
   /** Flat (chronological list) vs nested (hierarchical tree) rendering. Defaults to "nested". */
   viewMode?: SpanViewMode;

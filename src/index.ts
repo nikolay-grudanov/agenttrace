@@ -24,7 +24,7 @@
  *   raindrop workshop status         is it running?
  *   raindrop workshop serve          foreground daemon
  *   raindrop workshop update [args]  product-scoped update
- *   raindrop workshop mcp            MCP server over stdio (used by Claude Code/Cursor)
+ *   raindrop workshop mcp            MCP server over stdio (used by OpenCode and other MCP-aware agents)
  */
 import fs from "fs";
 import os from "os";
@@ -104,7 +104,7 @@ async function runBackend(): Promise<void> {
 async function runMcp(): Promise<void> {
   // The MCP server is a thin WebSocket bridge to the workshop daemon. If the
   // daemon isn't already running, the bridge would crash on `backend.connect()`
-  // with no clear signal to the user (Claude Code surfaces the failure as
+  // with no clear signal to the user (the plugin surfaces the failure as
   // "Failed to reconnect"). Auto-start the daemon so the plugin is robust to
   // machine restarts. All progress goes to stderr — stdout is reserved for
   // JSON-RPC frames.
@@ -729,7 +729,7 @@ DAEMON
 
 OTHER
     update [flags]   Self-update (default: stable channel). See update --help.
-    mcp              MCP server over stdio (used by Claude Code).
+    mcp              MCP server over stdio (used by OpenCode and other MCP-aware agents).
     reset            Delete the local Workshop DB after confirmation.
 
 OPTIONS
@@ -811,7 +811,7 @@ async function dispatchWorkshop(verb: string | undefined, rest: string[]): Promi
       break;
     case "setup":
       // Umbrella setup: file-drop installer for raindrop into Cursor /
-      // Claude Code. Distinct from `raindrop workshop setup`, which is
+      // OpenCode and other MCP-aware agents. Distinct from `raindrop workshop setup`, which is
       // the per-project (.env + daemon + open UI) bootstrap.
       process.exit(await cmdSetup(process.argv.slice(3)));
       break;

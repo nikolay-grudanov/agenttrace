@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getAgents, getAgentsHealth, getAnthropicModels, type AgentEntry, type AgentsHealth, type AgentsRegistry } from "../api/agents";
+import { getAgents, getAgentsHealth, type AgentEntry, type AgentsHealth, type AgentsRegistry } from "../api/agents";
 import { useWorkshopEvent } from "./use-workshop-ws";
 
 /**
@@ -9,9 +9,9 @@ import { useWorkshopEvent } from "./use-workshop-ws";
  * Three writers can mutate the registry from outside this React tree:
  *
  *   1. The Settings page UI (`PUT /api/agents`)
- *   2. The `/setup-agent-replay` slash command in Claude Code /
- *      Cursor — runs in a different process, writes the file on disk, then
- *      `curl`s `POST /api/agents/refresh` so we hear about it.
+ *   2. The `/setup-agent-replay` slash command in OpenCode — runs in a
+ *      different process, writes the file on disk, then `curl`s
+ *      `POST /api/agents/refresh` so we hear about it.
  *   3. A user hand-editing the file in vim, then optionally curl-refreshing.
  *
  * The Workshop server's `agents_updated` WS event covers (1) and (2). For
@@ -79,11 +79,4 @@ export function useAgentForEvent(eventName: string | null | undefined) {
     online: !!(name && health[name] === "online"),
     refetch,
   };
-}
-
-export function useAnthropicModels() {
-  return useQuery({
-    queryKey: ["anthropic-models"],
-    queryFn: getAnthropicModels,
-  });
 }

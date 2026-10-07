@@ -47,7 +47,7 @@ export function ConnectionIndicator({
   useEffect(() => {
     fetch("/api/status")
       .then((r) => r.json())
-      .then((body) => setStatus(body.agent ?? body.claude_code ?? { state: "gray" }))
+      .then((body) => setStatus(body.agent ?? { state: "gray" }))
       .catch(() => setStatus({ state: "gray" }));
   }, [provider]);
 

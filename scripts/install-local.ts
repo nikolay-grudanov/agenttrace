@@ -215,7 +215,7 @@ async function main(): Promise<void> {
   // We do it in-process via spawn to keep stdio clean and to capture exit code.
   //
   // Skip automatic `raindrop setup` here so install:local does not write into
-  // the dev's real ~/.cursor / ~/.claude. The IDE-wiring path is covered by
+  // the dev's real ~/.cursor / ~/.opencode. The IDE-wiring path is covered by
   // tests/install-init.test.ts and manual `raindrop setup` runs.
   const installResult = await new Promise<number>((resolve, reject) => {
     const child = spawn(

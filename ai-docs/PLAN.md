@@ -580,38 +580,137 @@ C) **SpanDetail parent + children** (`app/src/components/SpanDetail.tsx` + `app/
 
 ---
 
-### F-002 — Replace Codex / Claude Code integrations with OpenCode equivalents
+### F-002 — Strip Claude Code / Codex / Anthropic surface from Workshop
 
-**Context:** Workshop upstream has integrations for Codex CLI (`src/codex-cli-chat.ts`, `src/codex-sessions.ts`) and Claude Code (`src/claude-cli-chat.ts`, `src/spans/adapters/claude-agent-sdk.ts`). Kolya's stack is OpenCode-first (per task: "Мы все что с ними связано заменяем на opencode").
+**Context:** Workshop upstream has integrations for Codex CLI (`src/codex-cli-chat.ts`, `src/codex-sessions.ts`) and Claude Code (`src/claude-cli-chat.ts`, `src/spans/adapters/claude-agent-sdk.ts`). Kolya's stack is OpenCode-first (per task: "Мы все что с ними связано заменяем на opencode"). The 2026-07 plan scope (files in scope, dependencies to drop) was written before any Claude/Codex integration was added to the fork. Between then and F-002, somebody added Claude-sidepanel chat (`MessagePane.tsx`'s `ClaudeChatMessage` types, `useWorkshopEvent("claude_ask_user_question")` handlers, `/api/claude/ask-user-question` UI), Anthropic secret UI, Codex/Anthropic onboarding tiles in `EmptyState`, and Claude-specific annotation source types. Most of it had no server backing (the corresponding `/api/claude/...` and `/api/models/anthropic` routes don't exist on the daemon — `src/server.ts` returns 404 for them).
 
-**Scope of removal:**
-- ❌ Codex CLI integration — file `src/codex-cli-chat.ts`, references in `src/provider-options.ts`, `src/secret-store.ts`, `src/annotations.ts`, `src/db/schema.ts`, `scripts/seed-traces.ts`, `src/demo-traces.ts`, `scripts/dev-all.ts`, examples `examples/ai-sdk-chat/`, dependency `@ai-sdk/openai` (only if no other use)
-- ❌ Claude Code CLI — file `src/claude-cli-chat.ts`
-- ❌ Claude Agent SDK adapter — `src/spans/adapters/claude-agent-sdk.ts` (replaced by opencode-specific adapter)
-- ❌ Anthropic-specific — example `examples/claude-agent-sdk/`, `examples/anthropic-chat/`, dependency `@ai-sdk/anthropic`
-- ❌ Anthropic-specific provider install in `agent-install` / `examples/`
+**Closed 2026-09-23** — Kolya decided (verbatim): "удалить всю Claude Code UI и runtime-server-side bridge. Мы делаем наше решения для opencode, gigacode, mcode, hermes agent, vibe mistral, zcode." F-002 cleanup scope was executed in this commit. The full picture at start of commit:
 
-**Kept (NOT Codex/Claude-specific):**
-- ✅ `src/spans/adapters/ai-sdk.ts` — generic AI SDK adapter, used by OpenCode too (OpenCode uses AI SDK-style spans)
-- ✅ `src/spans/adapters/livekit.ts` — separate framework
-- ✅ `@ai-sdk/openai` dep — OpenCode also uses OpenAI-compatible providers (via OpenCode-go combo), keep
-- ✅ `src/agents.ts` (sub-agent detection) — generic, used for OpenCode too
-- ✅ `examples/ai-sdk-chat/` — generic AI SDK example, not Codex-specific
+- Server-side backend (`src/server.ts`) — **no Claude/Codex routes existed**. `/api/agent/...` is OpenCode-sidepanel (F-006), `/api/status` returns `{agent, agent_provider}`, `/api/agents` is the agents.json registry for local-replay. Nothing on the server matched Claude Code or Codex.
+- Frontend type drift — `AnnotationSource = "user" | "claude-code" | "codex"`, `SecretKey = "anthropic" | "openai" | "raindrop" | "query"`, several `api/claude/...` fetch calls, `getAnthropicModels()` calling a non-existent endpoint, `useAnthropicModels()` hook.
+- Onboarding — `EmptyState.tsx` listed Claude Code + Codex + Anthropic icon next to Cursor / Windsurf / Cline / Gemini CLI.
 
-**Verification:** after removal, `bun run dev` must still build + serve, OpenCode traces must still stream (this is the regression bar).
+**Scope of removal in this commit:**
 
-**Status 2026-09-01:** Scope is well-defined but no commits yet. Deferred in favour of F-001..F-005 + F-010/F-012/F-013 which deliver user-visible value faster. Will revisit when Kolya signals (currently 0 priority). Safe to leave as-is — files in scope are inert without code paths referencing them after F-001 (Cloud removal) commit `3122268`.
+- `app/src/api/chat.ts` — removed `ClaudeAskUserQuestion`/`ClaudeAskQuestion`/`AgentLoadout`/`AgentStreamEvent`/`ClaudeMessageStream` types and `answerAskUserQuestion()` function. The endpoint `/api/claude/ask-user-question/:id/answer` was never implemented server-side — frontend was calling it in a void. Other OpenCode-sidepanel functions kept (`listAgentSessions`, `getAgentSession`, `getAgentLoadout`, `sendAgentMessage`).
+- `app/src/api/agents.ts` — removed `claude_code` branch in `getAgentConnectionStatus()` (server never returned `claude_code`), removed `getAnthropicModels()` (calls non-existent `/api/models/anthropic`).
+- `app/src/hooks/use-agents.ts` — removed `useAnthropicModels()` hook.
+- `app/src/components/ConnectionIndicator.tsx` — removed `body.claude_code ??` branch.
+- `app/src/components/AnnotationChip.tsx` — `SOURCE_GLYPH` "claude-code" / "codex" → "opencode", labels retargeted.
+- `app/src/components/SpanTree.tsx` — annotation input type `"user" | "claude-code"` → `"user" | "opencode"`.
+- `app/src/components/RunDetail.tsx` — narrowed `createAnnotationAndSave` source literal, removed `anthropicModels?: string[]` prop threading through `ViewHeader` / `EditReplayModal` / `buildReplayModelOptions`, removed `useEffect` that fetched `/api/models/anthropic`, removed `[anthropicModels, setAnthropicModels]` state.
+- `app/src/pages/SavedPage.tsx` — `SavedAnnotationPreview.source` union narrowed.
+- `app/src/pages/SettingsPage.tsx` — removed `anthropic` field from `KeysSection` (no server backing, field was 100% UI-only), removed `raindrop` field (F-001 cloud), removed `query` field (F-017 local search). `SecretKey` is now `"openai"`-only.
+- `app/src/api/secrets.ts` — narrowed `SecretKey = "openai"`.
+- `app/src/components/EmptyState.tsx` — dropped "Claude Code" and "Codex" from "Works with" tiles, removed `anthropicIcon` and `codexLogo` imports, removed 3 unused icon files (`app/src/assets/codex-logo.svg`, `app/src/assets/claude-code-logo.png`, `app/src/assets/agent-icons/anthropic.svg`).
+- `app/src/i18n/locales/{en,ru}.json` — removed `anthropicPlaceholder`/`anthropicDescription`/`claudeCodeOnboarding`/`raindropPlaceholder`/`raindropDescription`/`raindropCloudMcp` keys (3 per locale). `queryPlaceholder`/`queryDescription`/`query` placeholder kept — these are used by `SearchPage.tsx` for the **search box**, not for a cloud API key (semantically mis-named key — renaming deferred to F-030).
+- `src/parse.ts:228` — comment removed `@raindrop-ai/claude-agent-sdk` mention (now refers to generic AI SDK users).
+- `src/db.ts:162` — comment "conversations with Claude" → "chat history".
+- `src/agents.ts:85, 89` — comment renamed "Claude Agent SDK pattern" → "third-party sub-agent pattern".
+- `src/index.ts` — 4 comments updated: `mcp` help text, Claude-Code reconnect comment, umbrella setup comment, status messaging.
+- `scripts/install-local.ts:218` — comment "dev's real ~/.cursor / ~/.claude" → "~/.cursor / ~/.opencode".
+
+**Out of scope (deferred to F-030 "Claude Code UI / MessagePane refactor"):**
+
+- `app/src/components/MessagePane.tsx` — Claude-specific UI: `ClaudeChatMessage`/`ClaudeSessionSummary`/`ClaudeAskUserQuestion` local types (line 17-90), `useWorkshopEvent("claude_ask_user_question")` and `"claude_ask_user_question_resolved"` handlers (lines 487, 504), `/api/claude/ask-user-question/:id/answer` fetch (line 698), `claude-slash-menu` UI (lines 930, 989). All of these are dead (server has no corresponding routes), but cleaning them up requires either (a) deleting them and accepting that MessagePane loses the Claude Code chat sidepanel feature entirely, or (b) rewriting the `Claude*` types to `Agent*` (the actual runtime is OpenCode-sidepanel per F-006). Both require reading 2248 lines of `MessagePane.tsx` and making UX decisions (does the slash-menu for OpenCode replace Claude's?). Out of scope for F-002 cleanup; tracked as F-030.
+- `app/src/utils/helpers.ts:80` — `if (s.includes("claude") || s.includes("anthropic")) return { label: "Anthropic" }` — this is **provider string detection** for displaying a model/provider label. Generic in nature (matches any model name with `claude` or `anthropic` substring), not Claude-specific integration. Kept. If user later runs OpenCode with Anthropic as a backend, this still labels correctly.
+- `app/src/components/RunDetail.tsx:78-82` — `DEFAULT_REPLAY_MODEL_FALLBACKS = ["claude-sonnet-4-6", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"]` — these are model names offered in the EditReplayModal dropdown. Removing them would force every replay to use only models present in the trace, breaking "fork with a different model" UX. Kept as legacy defaults.
+- `app/src/components/EmptyState.tsx:43` — `Cline` entry (with URI `vscode://extension/saoudrizwan.claude-dev` — that's the Cline VSCode extension ID, **not Claude Code**). Kept.
+- `src/spans/adapters/ai-sdk.ts:14` — comment mentioning `claude-agent-sdk` adapter as a comparator. Comment-only. Kept.
+- `skills/{setup-agent-replay,instrument-agent}/SKILL.md` and `src/skills.compiled.ts` — reference `claude-agent-sdk` as an example third-party integration in framework listings. Out of scope (docs, not code); tracked separately as F-031.
+
+**Kept (NOT Claude/Codex-specific):**
+
+- ✅ `src/spans/adapters/ai-sdk.ts` — generic AI SDK adapter, used by OpenCode too.
+- ✅ `src/spans/adapters/livekit.ts` — separate framework.
+- ✅ `@ai-sdk/openai` dep — OpenCode also uses OpenAI-compatible providers.
+- ✅ `src/agents.ts` (sub-agent detection) — generic, used by OpenCode too.
+- ✅ `examples/ai-sdk-chat/` — generic AI SDK example, not Codex-specific.
+- ✅ `app/src/utils/helpers.ts:80` — provider string detection, generic.
+
+**Verification:**
+
+- `bun x tsc --noEmit` → 0 errors.
+- `bun test tests/` → 138 pass / 0 fail (no regressions).
+- `bun scripts/embed-skills.ts` → regenerated `src/skills.compiled.ts` (still references claude-agent-sdk in docs strings, see F-031 note).
+- `bun scripts/embed-migrations.ts --check` → up to date.
+- Live UI smoke — deferred to Kolya per the "no daemon restart by the assistant" rule. Source-mode verification sufficient: no schema/migration change, no new endpoint, all removed code paths were no-ops (server returned 404 anyway).
+
+**Cross-repo impact:** NONE. Pure `agenttrace/` change. Plugin (`agenttrace-opencode-plugin`) and bridge (`agenttrace-qwen-bridge`) repos don't depend on any Claude/Codex/Anthropic surface.
+
+**Out-of-band follow-ups (not part of this commit):**
+
+- F-030 — `MessagePane.tsx` Claude-specific UI refactor (delete or rewrite `Claude*` types and slash-menu).
+- F-031 — Update `skills/*.md` docs to clarify OpenCode-only fork scope, removing examples that reference Claude Agent SDK as a first-class integration.
+- F-NNN — Update umbrella `STATUS.md` and `agenttrace/AGENTS.md` if any user-facing messaging still mentions Claude Code.
 
 **Todos:**
-- [x] Plan F-002 scope (this entry, with explicit "kept" list)
-- [ ] `rm` files in scope
-- [ ] `grep -r "codex\|claude.code\|claude-agent-sdk\|anthropic" -- src/` should return no results (after fixes)
-- [ ] `bun run typecheck` (or whatever upstream uses) — must pass
-- [ ] `bun run dev` (or our build) — smoke: OpenCode trace streams to UI
-- [ ] Remove `@ai-sdk/anthropic` from package.json (verify OpenCode doesn't need it)
-- [ ] Remove `raindrop-ai/claude-agent-sdk` from deps if present
-- [ ] Update `examples/` — remove `claude-agent-sdk/` and `anthropic-chat/` (keep ai-sdk-chat and opencode-specific ones if any)
-- [ ] Commit + push
+
+- [x] Plan F-002 scope (this entry, with explicit "kept" list).
+- [x] `app/src/api/chat.ts` — remove `ClaudeAskUserQuestion`/`ClaudeAskQuestion`/`AgentLoadout`/`AgentStreamEvent`/`ClaudeMessageStream`/`answerAskUserQuestion`.
+- [x] `app/src/api/agents.ts` — drop `claude_code` branch and `getAnthropicModels`.
+- [x] `app/src/hooks/use-agents.ts` — drop `useAnthropicModels`.
+- [x] `app/src/components/ConnectionIndicator.tsx` — drop `body.claude_code ??` branch.
+- [x] `app/src/components/AnnotationChip.tsx` — narrow `SOURCE_GLYPH` to `"opencode"` / `"user"`.
+- [x] `app/src/components/SpanTree.tsx` — narrow `onCreateAnnotation.source` literal.
+- [x] `app/src/components/RunDetail.tsx` — drop `anthropicModels` prop threading, state, and `/api/models/anthropic` fetch.
+- [x] `app/src/pages/SavedPage.tsx` — narrow `SavedAnnotationPreview.source`.
+- [x] `app/src/pages/SettingsPage.tsx` — drop `anthropic`/`raindrop`/`query` fields, stale-comment removal.
+- [x] `app/src/api/secrets.ts` — narrow `SecretKey = "openai"`.
+- [x] `app/src/components/EmptyState.tsx` — drop "Claude Code" and "Codex" tiles.
+- [x] `app/src/assets/{codex-logo.svg,claude-code-logo.png,agent-icons/anthropic.svg}` — `rm`.
+- [x] `app/src/i18n/locales/{en,ru}.json` — drop 3 locale keys each (6 total).
+- [x] `src/parse.ts`, `src/db.ts`, `src/agents.ts`, `src/index.ts`, `scripts/install-local.ts` — comment cleanup.
+- [x] `bun x tsc --noEmit` + `bun test tests/` (138/138) + `embed-migrations` check.
+- [ ] Live UI smoke (deferred to Kolya).
+- [ ] Commit + push (awaits Kolya's word).
+
+---
+
+### F-030 — MessagePane.tsx Claude-specific UI refactor
+
+**Context:** F-002 cleanup stopped short of `app/src/components/MessagePane.tsx` (2248 lines) because the file mixes OpenCode-sidepanel runtime (F-006) with Claude-specific UI that has no server backing. The dead-code Claude parts left in:
+
+- Local type definitions (lines 17-90): `interface ClaudeChatMessage`, `interface ClaudeSessionSummary`, `interface ClaudeSessionDetail extends ClaudeSessionSummary`, `interface ClaudeAskUserQuestion`, `interface ClaudeAskQuestion`, `interface ClaudeMessageStream`, plus `AgentStreamEvent` and `AgentLoadout` (which mirror the API/chat types but as local copies because MessagePane doesn't import from `api/chat.ts`).
+- `useWorkshopEvent("claude_ask_user_question")` handler at line 487 — listens for events the server never broadcasts (`broadcast("claude_ask_user_question", ...)` doesn't exist in `src/server.ts`).
+- `useWorkshopEvent("claude_ask_user_question_resolved")` handler at line 504 — same.
+- `fetch("/api/claude/ask-user-question/:id/answer", { method: "POST", body: JSON.stringify({ answers }) })` at line 698 — endpoint doesn't exist server-side.
+- `<div id="claude-slash-menu">` UI at lines 1530 and 989 — DOM-rendered but driven by no live data.
+
+**Why this needs its own Feature:** cleaning this up requires a UX decision Kolya must make. Two paths:
+
+(a) **Delete the Claude-specific UI entirely** — remove the local interfaces, the useWorkflowEvent handlers, the slash-menu DOM, the fetch call. The `Claude*` local types can be renamed to `Agent*` for consistency with `api/chat.ts`. Cost: we lose any UX surfaces where the user could see Claude-style slash-commands (which never worked anyway). Likely zero user impact since the dead code never produced visible behavior.
+
+(b) **Rewrite the local interfaces to `Agent*` and rewire the slash-menu to OpenCode's actual loadout** — keep the slash-menu feature alive, but drive it from the OpenCode-sidepanel flow that F-006 actually wired up (`getAgentLoadout()` → `/api/agent/loadout`). Cost: ~half-day to read MessagePane and rewire, plus a decision on slash-menu UX.
+
+Recommendation: option (a). The slash-menu was never wired to live data; option (b) is feature work that doesn't have a Kolya-stated user need.
+
+**Effort:** 4-6 hours for option (a), 1 day for option (b). Trivial regression bar: `bun x tsc --noEmit && bun test tests/` stays green.
+
+**Out of scope:** `helpers.ts:80` (provider-string detection — kept), `RunDetail.tsx:79-81` (model fallback list for EditReplayModal — kept), `EmptyState.tsx:43` Cline entry (not Claude Code — kept), `src/skills.compiled.ts` claude-agent-sdk mentions (docs, F-031).
+
+**Todos:**
+- [ ] Kolya picks option (a) or option (b)
+- [ ] (option a) delete Claude-specific local types, handlers, fetch, slash-menu DOM
+- [ ] (option b) rename local `Claude*` types to `Agent*`, rewire slash-menu to OpenCode loadout
+- [ ] `bun x tsc --noEmit && bun test tests/` clean
+- [ ] Live UI smoke
+
+---
+
+### F-031 — Update skills/ docs to clarify OpenCode-only fork scope
+
+**Context:** `skills/setup-agent-replay/SKILL.md` and `skills/instrument-agent/SKILL.md` (both embedded into `src/skills.compiled.ts` by `scripts/embed-skills.ts`) reference `claude-agent-sdk` as an example third-party integration. After F-002, Claude Agent SDK is no longer a first-class supported integration in this fork. References should be removed or rewritten as "third-party / generic AI SDK" examples.
+
+**Effort:** 1-2 hours (search-and-replace in two SKILL.md files, re-run `bun scripts/embed-skills.ts`).
+
+**Cross-repo impact:** NONE. Skills are runtime content consumed by `/api/skills` and `/v1/skills` endpoints.
+
+**Todos:**
+- [ ] Grep `skills/*.md` for "claude-agent-sdk" / "Claude Agent SDK" / "@raindrop-ai/claude-agent-sdk"
+- [ ] Replace with generic "third-party AI SDK" framing
+- [ ] Re-run `bun scripts/embed-skills.ts`
+- [ ] `bun x tsc --noEmit` clean
 
 ---
 

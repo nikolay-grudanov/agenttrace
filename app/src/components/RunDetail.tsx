@@ -85,13 +85,11 @@ function buildReplayModelOptions(opts: {
   selectedModel?: string | null;
   runModel?: string | null;
   metadataModel?: string | null;
-  anthropicModels?: string[];
 }): string[] {
   const merged = [
     opts.selectedModel ?? null,
     opts.runModel ?? null,
     opts.metadataModel ?? null,
-    ...(opts.anthropicModels ?? []),
     ...DEFAULT_REPLAY_MODEL_FALLBACKS,
   ];
   const seen = new Set<string>();
@@ -614,7 +612,7 @@ function annotationToSavedPreview(annotation: Annotation): SavedAnnotationPrevie
 }
 
 function ViewHeader({
-  title, model, active, stats, allSpans, startedAt, anthropicModels,
+  title, model, active, stats, allSpans, startedAt,
   run, source, isReplay, breadcrumb, fork, onAnnotateRun, onDownload, deleteRedirectPath,
 }: {
   title: string;
@@ -623,7 +621,6 @@ function ViewHeader({
   stats: { spans: number; tools: number; llms: number; errors: number; dur: number; agents?: number; inTokens?: number; outTokens?: number };
   allSpans?: Span[];
   startedAt?: number;
-  anthropicModels?: string[];
   run?: Run;
   source?: "local" | "cloud";
   isReplay?: boolean;
@@ -694,8 +691,7 @@ function ViewHeader({
     selectedModel: forkModel,
     runModel: model,
     metadataModel: traceModelFromMetadata,
-    anthropicModels,
-  }), [forkModel, model, traceModelFromMetadata, anthropicModels]);
+  }), [forkModel, model, traceModelFromMetadata]);
   const handleRename = useCallback((name: string) => {
     if (!run) return;
     renameRun(run.id, name)
@@ -1016,10 +1012,9 @@ function ViewHeader({
   );
 }
 
-function EditReplayModal({ userMessage, model, runId, eventName, traceModelFromMetadata, anthropicModels, onReplay, onClose }: {
+function EditReplayModal({ userMessage, model, runId, eventName, traceModelFromMetadata, onReplay, onClose }: {
   userMessage: string; model?: string | null; runId: string; eventName?: string;
   traceModelFromMetadata?: string | null;
-  anthropicModels?: string[];
   onReplay: (msg: string, mode: "local", mdl?: string, ctxOverrides?: Record<string, any>) => void;
   onClose: () => void;
 }) {
@@ -1055,8 +1050,7 @@ function EditReplayModal({ userMessage, model, runId, eventName, traceModelFromM
     selectedModel: mdl,
     runModel: model,
     metadataModel: traceModelFromMetadata,
-    anthropicModels,
-  }), [mdl, model, traceModelFromMetadata, anthropicModels]);
+  }), [mdl, model, traceModelFromMetadata]);
 
   const handleReplay = () => {
     const ctxOverrides = mode === "local" && Object.keys(contextEdits).length > 0
@@ -1259,7 +1253,6 @@ export function RunDetail({ runId, routeBase, initialData, isReplay, source, onF
   const [notFound, setNotFound] = useState(false);
   const [agentTab, setAgentTab] = useState<"chat" | "tree" | "sessions">("chat");
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>(initialData?.liveEvents ?? []);
-  const [anthropicModels, setAnthropicModels] = useState<string[]>([]);
   const annotationsApi = useAnnotations(runId);
   const autoSavedAnnotationIdsRef = useRef<Set<string>>(new Set());
   const stickToBottomContextRef = useRef<StickToBottomContext | null>(null);
@@ -1267,26 +1260,6 @@ export function RunDetail({ runId, routeBase, initialData, isReplay, source, onF
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const fetchModels = () => {
-      fetch("/api/models/anthropic")
-        .then(r => r.ok ? r.json() : null)
-        .then((data) => {
-          if (cancelled) return;
-          if (Array.isArray(data?.models)) setAnthropicModels(data.models);
-        })
-        .catch(() => {});
-    };
-    fetchModels();
-    const onKeyChange = () => fetchModels();
-    window.addEventListener("workshop:api-key-change", onKeyChange);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("workshop:api-key-change", onKeyChange);
-    };
-  }, []);
 
   const goOverview = useCallback(() => {
     setSessionsOverlayActive(false);
@@ -1465,7 +1438,7 @@ export function RunDetail({ runId, routeBase, initialData, isReplay, source, onF
   }, [source]);
 
   const createAnnotationAndSave = useCallback(async (
-    input: { span_id?: string | null; kind: AnnotationKind; note?: string; source?: "user" | "claude-code" | "codex" }
+    input: { span_id?: string | null; kind: AnnotationKind; note?: string; source?: "user" | "opencode" }
   ) => {
     const created = await annotationsApi.create({ ...input, source: input.source ?? "user" });
     if (created) saveAnnotationPreview(created);
@@ -1519,7 +1492,6 @@ export function RunDetail({ runId, routeBase, initialData, isReplay, source, onF
           model={agent.model}
           active={isActive(run)}
           startedAt={agent.start_time_ms}
-          anthropicModels={anthropicModels}
           stats={{
             spans: agentSpans.length, tools: agentTools.length, llms: agentLLMs.length, errors: agentErrs.length, dur: agent.duration_ms,
             inTokens: agent.total_input_tokens, outTokens: agent.total_output_tokens,
@@ -1594,7 +1566,6 @@ export function RunDetail({ runId, routeBase, initialData, isReplay, source, onF
         model={model}
         active={active}
         startedAt={run.started_at}
-        anthropicModels={anthropicModels}
         stats={{
           spans: spans.length, tools: tools.length, llms: llms.length, errors: errs.length, dur,
           agents: subAgents.length,
@@ -1667,7 +1638,6 @@ export function RunDetail({ runId, routeBase, initialData, isReplay, source, onF
           runId={runId}
           eventName={run.event_name ?? undefined}
           traceModelFromMetadata={parseReplayMetadata(run)?.replay?.model ?? null}
-          anthropicModels={anthropicModels}
           onReplay={(msg, mode, mdl, ctx) => onForkStarted(runId, msg, mode, mdl, ctx)}
           onClose={() => setEditModal(null)}
         />

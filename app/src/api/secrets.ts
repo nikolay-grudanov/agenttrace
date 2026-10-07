@@ -1,6 +1,9 @@
 import { apiJson, jsonInit } from "./request";
 
-export type SecretKey = "anthropic" | "openai" | "raindrop" | "query";
+// Server-side enum in src/secret-store.ts:SECRET_DEFS is currently "openai"-only.
+// `raindrop` and `query` were removed in F-001 (cloud) and F-017 (local search).
+// `anthropic` had no server backing (F-002) and is removed here too.
+export type SecretKey = "openai";
 export type SecretSource = "env" | "store" | null;
 
 export interface SecretStatus {

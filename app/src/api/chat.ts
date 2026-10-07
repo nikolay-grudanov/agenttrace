@@ -2,7 +2,12 @@ import { apiJson, apiJsonOrNull, jsonInit } from "./request";
 
 type Role = "user" | "assistant";
 
-export type ClaudeChatMessageBlock =
+// OpenCode-sidepanel agent API (F-006). These wire types are shared between the
+// standalone Claude-flavored names kept for historical reasons and the actual
+// runtime (which is OpenCode-only — see src/agent-chat.ts:AgentProviderId). The
+// rename to *Agent* types is deferred to F-030 (F-002 keeps them as-is to keep
+// this commit small and reversible).
+export interface ClaudeChatMessageBlock =
   | { type: "text"; text: string }
   | { type: "tool"; id: string; name: string; input_preview?: string; output_preview?: string; ok?: boolean }
   | { type: "thinking"; text: string };
@@ -30,47 +35,6 @@ export interface ClaudeSessionDetail extends ClaudeSessionSummary {
   messages: ClaudeChatMessage[];
 }
 
-export interface ClaudeAskQuestion {
-  question: string;
-  header?: string;
-  multiSelect: boolean;
-  options: Array<{ label: string; description?: string }>;
-}
-
-export interface ClaudeAskUserQuestion {
-  id: string;
-  session_id: string;
-  tool_use_id: string;
-  questions: ClaudeAskQuestion[];
-  created_at: string;
-}
-
-export interface AgentLoadout {
-  tools?: string[];
-  mcps?: string[];
-  skills?: string[];
-  plugins?: string[];
-  slash_commands?: string[];
-  model?: string;
-}
-
-export type AgentStreamEvent =
-  | { type: "text"; content: string }
-  | ({ type: "loadout" } & AgentLoadout)
-  | { type: "error"; content: string }
-  | { type: "tool_start"; id: string; name: string; input_preview?: string }
-  | { type: "tool_finish"; id: string; ok: boolean; output_preview?: string }
-  | { type: "thinking_delta"; content: string }
-  | { type: "subagent_start"; parent_id: string; subagent: string }
-  | { type: "provider_session"; sessionId: string }
-  | { type: "done" };
-
-export interface ClaudeMessageStream {
-  client_message_id?: string;
-  session_id?: string | null;
-  event?: AgentStreamEvent;
-}
-
 export interface SendAgentMessageResponse {
   session_id?: string;
   session?: ClaudeSessionDetail;
@@ -96,8 +60,4 @@ export async function sendAgentMessage(body: {
   client_message_id: string;
 }): Promise<SendAgentMessageResponse> {
   return apiJson<SendAgentMessageResponse>("/api/agent/messages", jsonInit("POST", body));
-}
-
-export async function answerAskUserQuestion(id: string, answers: Record<string, string>): Promise<void> {
-  await apiJson<{ ok?: boolean }>(`/api/claude/ask-user-question/${encodeURIComponent(id)}/answer`, jsonInit("POST", { answers }));
 }

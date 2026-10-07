@@ -1,11 +1,9 @@
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
-import anthropicIcon from "../assets/agent-icons/anthropic.svg";
 import clineIcon from "../assets/agent-icons/cline.svg";
 import cursorIcon from "../assets/agent-icons/cursor.svg";
 import geminiIcon from "../assets/agent-icons/gemini.svg";
 import windsurfIcon from "../assets/agent-icons/windsurf.svg";
-import codexLogo from "../assets/codex-logo.svg";
 import { C } from "../utils/colors";
 import { DropPixelGrid } from "./DropPixelGrid";
 
@@ -21,10 +19,14 @@ import { DropPixelGrid } from "./DropPixelGrid";
  * The "another project" panel covers the day-2 case: user already
  * has raindrop on their machine and wants to debug a NEW project.
  *
- * The "other AI tools" copy-prompt panel covers users who use Codex,
- * or some agent that doesn't read MCP from Cursor / Claude
- * Code's config dirs. They can paste the prompt and have their
- * agent walk them through it.
+ * The "other AI tools" copy-prompt panel covers users who use
+ * non-OpenCode agents that read MCP from Cursor / Windsurf / Cline /
+ * similar configs. They can paste the prompt and have their agent
+ * walk them through it.
+ *
+ * Per F-002 we explicitly do NOT list Claude Code, Codex, or any
+ * other proprietary CLI. OpenCode is the canonical first-class
+ * integration; the rest show up in the docs.
  *
  * Port is hardcoded to 5899 to match the published install URL and
  * the marketing copy in README.md. We deliberately don't read it from
@@ -36,8 +38,6 @@ const SETUP_ANOTHER_SLASH = `/instrument-agent`;
 
 const AGENTS = [
   { name: "Cursor", localHref: "cursor://", icon: cursorIcon },
-  { name: "Claude Code", icon: anthropicIcon },
-  { name: "Codex", icon: codexLogo, invertIcon: true },
   { name: "Windsurf", localHref: "windsurf://", icon: windsurfIcon },
   { name: "Gemini CLI", icon: geminiIcon },
   { name: "Cline", localHref: "vscode://extension/saoudrizwan.claude-dev", icon: clineIcon },

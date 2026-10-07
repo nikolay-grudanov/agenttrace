@@ -159,7 +159,7 @@ const BLOCKED_EXPENSIVE_QUERY_RE = new RegExp(
 
 // `messages` holds legacy Workshop chat history, not trace data. Block it so
 // query_traces can't be used as a side-channel to read the user's
-// conversations with Claude.
+// chat history.
 const BLOCKED_TABLES_RE = /\bmessages\b/i;
 
 function stripSqlComments(sql: string): string {

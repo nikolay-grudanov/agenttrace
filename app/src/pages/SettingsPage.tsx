@@ -217,13 +217,7 @@ function AgentEndpointsSection() {
 
 function KeysSection() {
   const [drafts, setDrafts] = useState<Record<SecretKey, string>>({
-    anthropic: "",
     openai: "",
-    raindrop: "",
-    // `query` (cloud query.raindrop.ai) is no longer used in the UI as of
-    // F-017; the key still exists in the SecretKey enum but is not surfaced
-    // here. Storing "" avoids accidental writes.
-    query: "",
   });
   const [statuses, setStatuses] = useState<SecretStatuses | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -300,19 +294,11 @@ function KeysSection() {
 
   return (
     <SectionBlock id="keys" title="API Keys" description="Keys are sent once to the local daemon and are never read back into the browser. Paste a new key to replace a saved one.">
-      <SecretInput label="Anthropic" placeholder="sk-ant-..." description={sourceText("anthropic", "Used for replay and Ask chat.")} value={drafts.anthropic} saved={secretSaved("anthropic")} saving={savingKey === "anthropic"} onChange={v => setDraft("anthropic", v)} onSave={v => persist("anthropic", v)} onClear={canClearSecret("anthropic") ? () => clearSecret("anthropic") : undefined} getKeyUrl="https://console.anthropic.com/settings/keys" />
       <SecretInput label="OpenAI" placeholder="sk-..." description={sourceText("openai", "Used for replay with GPT models.")} value={drafts.openai} saved={secretSaved("openai")} saving={savingKey === "openai"} onChange={v => setDraft("openai", v)} onSave={v => persist("openai", v)} onClear={canClearSecret("openai") ? () => clearSecret("openai") : undefined} getKeyUrl="https://platform.openai.com/api-keys" />
-      <SecretInput label="Raindrop" placeholder="rk_..." description={sourceText("raindrop", "Write key for trace shipping.")} value={drafts.raindrop} saved={secretSaved("raindrop")} saving={savingKey === "raindrop"} onChange={v => setDraft("raindrop", v)} onSave={v => persist("raindrop", v)} onClear={canClearSecret("raindrop") ? () => clearSecret("raindrop") : undefined} getKeyUrl="https://app.raindrop.ai" />
-      {/* Query API key (query.raindrop.ai) was removed in F-017 — search is now
-          local. The `query` field stays in SecretKey enum to avoid touching
-          secrets.ts; the UI just doesn't surface a corresponding input. */}
       {saveError && <div className="text-[11px]" style={{ color: C.red }}>{saveError}</div>}
     </SectionBlock>
   );
 }
-
-// DaemonQueryKeyStatus removed in F-017: it showed Raindrop Cloud MCP state, but
-// the query.raindrop.ai dependency is gone — search is fully local now.
 
 function DebugSection() {
   const [reset, setReset] = useState(false);

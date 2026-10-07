@@ -1,7 +1,9 @@
 import { apiJson, jsonInit } from "./request";
 
+// AnnotationSource matches the server's enum in src/db/schema.ts:annotations.source
+// ("user" | "opencode"). Per F-002, Claude Code / Codex are out — OpenCode-only.
 export type AnnotationKind = "issue" | "good" | "note";
-export type AnnotationSource = "user" | "claude-code" | "codex";
+export type AnnotationSource = "user" | "opencode";
 
 export interface Annotation {
   id: string;

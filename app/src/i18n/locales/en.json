@@ -125,18 +125,12 @@
     "offline": "Offline",
     "agentNamePlaceholder": "agent-name",
     "replayUrlPlaceholder": "http://localhost:5860/replay",
-    "anthropicPlaceholder": "sk-ant-...",
     "openAiPlaceholder": "sk-...",
-    "raindropPlaceholder": "rk_...",
     "queryPlaceholder": "your-query-api-key",
     "apiKeysDescription": "Keys are sent once to the local daemon and are never read back into the browser. Paste a new key to replace a saved one.",
-    "anthropicDescription": "Used for replay and Ask chat.",
     "openAiDescription": "Used for replay with GPT models.",
-    "raindropDescription": "Write key for trace shipping.",
     "queryDescription": "Key for searching events in the Search tab.",
-    "debugDescription": "Tools for resetting in-progress local chat UI state.",
-    "raindropCloudMcp": "Raindrop Cloud MCP",
-    "claudeCodeOnboarding": "Claude Code chat onboarding"
+    "debugDescription": "Tools for resetting in-progress local chat UI state."
   },
   "run": {
     "overview": "Overview",

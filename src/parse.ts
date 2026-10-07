@@ -224,9 +224,8 @@ export function parseOtlpRequest(body: any): ParsedSpan[] {
         //      so few users hit this path.
         //   2. Manual SDK association properties — the `raindrop-ai` package emits user
         //      properties as `traceloop.association.properties.*`.
-        //   3. Inside the JSON-serialized `raindrop.properties` blob — the only path available
-        //      to `@raindrop-ai/claude-agent-sdk` users (no escape hatch for arbitrary attrs)
-        //      and the natural fit for AI SDK users too (`eventMetadata({ properties: { replayRunId } })`).
+        //   3. Inside the JSON-serialized `raindrop.properties` blob — the natural
+        //      fit for AI SDK users (`eventMetadata({ properties: { replayRunId } })`).
         //      We crack open the JSON and look for `replayRunId` here so the canonical contract
         //      is "put it in properties" — works across every SDK wrapper.
         let replayRunId = first(

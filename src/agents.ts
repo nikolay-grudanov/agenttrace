@@ -82,13 +82,13 @@ export function detectSubAgents(spans: SpanRow[]): SubAgent[] {
 
     // Detect sub-agent patterns:
     // 1. Classic agentic loop: TOOL > LLM > TOOL (tool contains LLM that uses tools)
-    // 2. Named sub-agent: TOOL > agent.subagent (Claude Agent SDK pattern — may not have tool children)
+    // 2. Named sub-agent: TOOL > agent.subagent (third-party sub-agent pattern — may not have tool children)
     // 3. OpenCode `task` tool OR any tool that carries `subagent_name` attribute:
     //    the plugin attaches `subagent_name` to every delegated sub-agent tool
     //    span in `tool.execute.before`, regardless of the tool's canonical name
-    //    (the OpenCode built-in is `task`; Claude Agent SDK uses `subagent.*`;
-    //    custom plugins may use other names). Catching all of them keeps the
-    //    UI consistent even when a leaf sub-agent has no further children.
+    //    (the OpenCode built-in is `task`; some plugins use `subagent.*` or other
+    //    custom names). Catching all of them keeps the UI consistent even when
+    //    a leaf sub-agent has no further children.
     const isTaskTool = span.name === "task";
     const kids = children.get(span.id) ?? [];
     const llmKids = kids.filter(k => k.span_type?.includes("LLM"));
