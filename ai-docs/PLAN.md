@@ -740,6 +740,104 @@ C) **SpanDetail parent + children** (`app/src/components/SpanDetail.tsx` + `app/
 
 ---
 
+### F-032 — Complete UI localization (i18n sweep across all components)
+
+**Context:** F-016 (commit `4b63371`, 2026-09-08) shipped i18n infrastructure (`react-i18next` + `i18next-browser-languagedetector` + `useT()` hook + LangSwitcher in NavSidebar + `app/src/i18n/locales/{en,ru}.json` with ~120 keys). But the **sweep** — replacing hardcoded strings across all components — was left as a future todo and **never completed**. Result, verified live on 2026-09-23:
+
+- LangSwitcher correctly toggles `localStorage["workshop:lang"]` and the icon "ru"/"en" pill changes in NavSidebar footer (left of screen).
+- **Preset prompts in TraceDebugPrompt** (top-right sidepanel) — localized. Visible in live smoke: "Что здесь сломалось?", "Какие инструменты Workshop мне доступны?".
+- **Everything else** — hardcoded English. On the same screenshot:
+  - Top-bar buttons: "Annotate", "Debug", "Download", "Save", "Replay", "Export as HTML" — all English.
+  - Tab labels: "Overview", "Span Tree", "Session Tree", "Convo" — English.
+  - Stat labels in CONVO STATS / BY MODEL / PER-RUN: "duration", "LLM calls", "tool calls", "sub-agent", "errors", "tokens", "BY MODEL", "PER-RUN", "covered", "Totals undercount spans" — all English.
+  - Chat input placeholder: "Спросить про этот ран..." — **already Russian** (so this one works).
+  - DCP compression labels: "DCP", "removed", "summary", "net", "compressions", "tokens removed", "tokens in summaries", "net context saved", "compressed", "Deltas parsed from DCP chat notifications — exact when captured." — **English**.
+  - **Preset chip that gets sent to OpenCode** ("What went wrong here? Inspect the focused run and the failing spans, and tell me what to fix.") — **English**, even when UI is RU. Verified screenshot chat response from OpenCode was also English ("I'll inspect the focused run to find the failing spans.").
+
+**Why this is a real bug, not cosmetic:**
+
+1. **Promise gets sent to the agent in English** when LangSwitcher = ru. This is the worst symptom — the user's language choice for the UI does NOT propagate to the prompt template. Every OpenCode invocation from a Russian-speaking user carries an English prompt. This is observable in the screenshot: preset is in English, agent response is in English.
+
+2. **Mixed-language UI** is harder to read than no-i18n at all. Russian-speaking users see Russian chat input + English stat columns + English preset chip + English button labels — confusing.
+
+3. **F-016 explicitly deferred the work** in its own todos:
+   ```
+   - [ ] Future sweep: RunsPage, SearchPage, SettingsPage, error messages, button labels
+   - [ ] Unit test: key switch under `I18nProvider language="ru"`
+   ```
+   These todos were never ticked. Plus the actual scope turned out larger than anticipated — every component is a candidate.
+
+**Scope of work:**
+
+**A. Surface the bug** (the prompt template problem) — separate, smaller fix:
+
+- `app/src/components/presetPrompts.ts` exports `PRESET_PROMPTS` as `PresetPrompt[]` with English-only `prompt` strings. These get sent verbatim to OpenCode. Fix: ship a `presetPrompts.ru` namespace OR ship `PRESET_PROMPTS` as `Record<lang, PresetPrompt[]>` keyed by language, OR (best) keep English prompts but expose a language-aware variant: `PRESET_PROMPTS_BY_LANG[locale]` where Russian locale has Russian prompts. The screenshot shows Russian chat input works (placeholder), but the preset chip that gets injected is English.
+- Wire `useT()` or `getLanguage()` into the preset chip rendering so the displayed text + the actually-sent prompt both follow the user's language.
+- Acceptance: switching to Russian, clicking a preset chip — both the chip text AND the sent prompt are Russian.
+
+**B. Full UI sweep** (larger fix):
+
+For each component, replace hardcoded English strings with `t("namespace.key")` calls and add the corresponding key to `app/src/i18n/locales/{en,ru}.json`. Components to sweep (verified incomplete vs. data-rebuilt):
+
+- `app/src/components/RunDetail.tsx` (1677 lines) — biggest offender. Tabs ("Overview/Span Tree/Session Tree/Convo"), top-bar buttons ("Annotate/Debug/Download/Save/Replay/Export as HTML"), stat column headers, error messages, save-folder dropdown labels, "MODEL"/"DURATION"/"USER"/"CONVO"/"TRACE" badges, DCP compression block ("DCP", "compressions", "removed", "summary", "net", "tokens removed", "tokens in summaries", "net context saved", "compressed", "messages", "msg", "Deltas parsed from DCP chat notifications"), save modal ("Cancel", "Move folder or unsave", "Saved", "Save run", "Save", "Folder"), error toasts ("Could not load run (${status})", "Failed to load run").
+- `app/src/components/SpanTree.tsx` — "No spans", span type labels, "tool"/"subagent"/"llm" filter chips.
+- `app/src/pages/RunsPage.tsx` — page title, filter labels.
+- `app/src/pages/SavedPage.tsx` (1118 lines) — folder names, "Saved Events", sort headers.
+- `app/src/pages/SearchPage.tsx` — already partially localized (F-016), but search box placeholder, results count, "no results", facet headers.
+- `app/src/pages/SettingsPage.tsx` (352 lines) — section titles ("API Keys", "Models", etc.), description text, all input labels, "Saved"/"Saving..." status, error messages.
+- `app/src/components/EmptyState.tsx` — "Waiting for your agent...", "Now just instrument your agent using our skill. Next run, you'll see traces here.", "See demo traces", "Loading demo traces...", "Traces will appear here as soon as your instrumented agent runs.", "Works with".
+- `app/src/components/ConnectionIndicator.tsx` — status labels, workspace switcher.
+- `app/src/components/AnnotationChip.tsx` — "issue"/"good"/"note" labels (currently in `KIND_STYLES`), "OpenCode"/"You" source labels.
+- `app/src/components/ChatFlow.tsx`, `MessagePane.tsx` — message bubble labels, "Scroll to bottom", "Thinking...", assistant/user/tool/system role labels.
+- `app/src/components/NavSidebar.tsx` — already partially localized (F-016).
+- `app/src/components/LangSwitcher.tsx` — already partially localized.
+
+**Out of scope:**
+
+- `app/src/i18n/locales/*.json` keys for **new languages** beyond en/ru. Kolya asked for "полную локализацию" but didn't specify languages. Assume en + ru only for this Feature. Adding more languages is `F-033` (add language X).
+- `src/skills.compiled.ts` English-only skill docs (F-031 covers Claude-related mentions, but full skill doc translation is separate).
+- Daemon-side error messages (server returns English error JSONs, like `{"error":"run_id required"}`) — these are server-rendered or already localized server-side per F-016's contract; only UI strings need translation.
+- Numbers / dates / measurement formatting (Workshop displays "44.1s", "81 452 in / 4 512 out", "26 spans", "85 964 tokens"). These follow locale-aware formatting in `i18next-browser-languagedetector` automatically (numbers + dates), but token counts ("85 964") may need explicit `<Intl.NumberFormat>` if we want comma vs. space separators. Not blocking for this Feature.
+
+**Effort:**
+
+- Surface-bug (preset prompt localization): 1-2 hours.
+- Full sweep: 1-2 days of mechanical work (grep-and-replace per file). Each file needs:
+  1. Read all hardcoded English strings.
+  2. Decide on a key namespace (already established: `nav.*`, `runs.*`, `search.*`, `saved.*`, `settings.*`, `run.*`, `convo.*`, `annotations.*`, `spans.*`, `errors.*`, `chat.preset.*`).
+  3. Add keys to both `en.json` and `ru.json`.
+  4. Replace literals with `t("namespace.key")`.
+  5. Verify tsc + tests.
+
+**Acceptance criteria:**
+
+- [ ] LangSwitcher toggle (RU en) re-renders the entire UI in the chosen language.
+- [ ] All visible user-facing English text in RunsPage, RunDetail (all 4 tabs), SearchPage, SavedPage, SettingsPage, EmptyState, ConnectionIndicator, AnnotationChip, ChatFlow, MessagePane is localized.
+- [ ] Switching to RU, clicking a preset chip in TraceDebugPrompt — the chip label AND the prompt sent to OpenCode are both Russian.
+- [ ] `bun x tsc --noEmit` clean.
+- [ ] `bun test tests/` clean.
+- [ ] No regression: OpenCode traces still stream, sidepanel still works, settings still persist.
+- [ ] Live UI smoke: switch to RU, navigate RunsPage → RunDetail → Convo, verify all UI text is Russian, verify preset chip sends Russian prompt, verify OpenCode responds in Russian (or at least attempts to).
+- [ ] Update F-032 to `Closed YYYY-MM-DD`; move to `## Closed Features`.
+
+**Handoff for next session:**
+
+- Take a fresh live-UI smoke in both EN and RU, screenshot every screen (Runs, RunDetail×4 tabs, Search, Saved, Settings, EmptyState when no traces). Use as the i18n source-of-truth.
+- Build the key catalog from those screenshots — don't trust the existing `en.json` to enumerate what's visible.
+- Sweep in priority order: top-bar buttons + tab labels + stat headers (RunDetail) → preset prompts (the bug) → page titles → settings labels → error messages.
+
+**Cross-repo impact:** NONE. Pure `app/`-side change. No wire-format change.
+
+**Todos:**
+- [ ] Start next session: take EN+RU screenshots of all main screens for key catalog
+- [ ] (Block A — surface bug) Fix `presetPrompts.ts` so chip text + sent prompt follow `useT()`
+- [ ] (Block B — sweep) Add new keys to `en.json` + `ru.json` covering all observed English literals
+- [ ] (Block B — sweep) Replace literals in RunDetail, SpanTree, RunsPage, SavedPage, SearchPage, SettingsPage, EmptyState, ConnectionIndicator, AnnotationChip, ChatFlow, MessagePane
+- [ ] Verify tsc + tests + live UI smoke in both languages
+- [ ] Update F-032 to Closed; move to `## Closed Features`
+
+---
+
 ## Backlog (not yet started, after F-001..F-005)
 
 - F-006 — Reverse-engineer upstream PRs from `raindrop-ai/workshop` selectively (cherry-pick, not full sync — we want specific patches only)
