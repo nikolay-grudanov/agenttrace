@@ -1220,6 +1220,127 @@ If Kolya wants back-compat (read both, prefer new, log migration warning), this 
 
 ---
 
+### F-038 — Agent feedback loop: MCP tools for self-diagnosis + SLO + trace replay + knowledge base
+
+**Context:** Kolya observation 2026-09-23 (verbatim): "мы не просто AI agent observability platform мы же еще даем mcp для агентов чтоб они анализировали этот самый observability и могли понимать что не так и что надо делать и что улучшать чтоб все работало более стабильно. возможно кроме mcp нам нужно что-то еще добавить или расширить его или еще что-то".
+
+Workshop today (post-F-002/F-006/F-029) is a **two-layer** product:
+
+- **Layer 1 — Observability data plane.** Spans ingestion, DB, UI, search, export. This is the "Phoenix / Langfuse / LangSmith" layer.
+- **Layer 2 — Agent-accessible MCP.** F-006 wired `workshop_get_current_run`, `workshop_get_run_outline`, `workshop_get_span_payload`, `workshop_query_traces` so agents can read their own traces.
+
+Kolya's observation identifies a **Layer 3** that doesn't exist yet — the **feedback loop**: agents not only *read* their traces but *act on understanding themselves* and improve. This is a new product category: **agentic observability with self-improvement loop**. Not Phoenix, not Langfuse, not LangSmith. Closer to a meta-cognitive substrate for AI agents.
+
+**Scope of F-038** (large strategic Feature, broken into sub-features F-038-A through F-038-E):
+
+#### F-038-A — MCP tools for self-diagnosis (server-side analysis, agent-friendly)
+
+Extend the MCP surface from "raw trace queries" to "structured diagnostics":
+
+- `workshop_diagnose_run(runId)` — server-side analysis. Returns `{ failures: [...], anomalies: [...], suggestions: [...], slos_violated: [...] }`. Agent gets actionable list, not raw spans.
+- `workshop_compare_runs(runIdA, runIdB)` — diff two runs (what changed: new errors, regressed tools, perf drift). Foundation for regression testing.
+- `workshop_find_patterns(since: timestamp, filters: ...)` — server-side aggregation: "in the last 7 days, my common failure modes are: tool:read_file OOM (12 runs), tool:bash timeout (8 runs), DCP compaction regression (3 runs)".
+- `workshop_suggest_fix(spanId)` — for a failed span, returns `{ kind: 'code_patch' | 'config_change' | 'model_switch', description: ..., confidence: 0.0-1.0 }`. **Optional**: requires LLM integration; can ship without.
+
+**Files**: `src/mcp/tools.ts` (extend), `src/diagnostics/` (new module).
+
+**Effort**: 1-2 days for diagnose + compare + find_patterns. suggest_fix requires LLM integration, separate F-NNN.
+
+#### F-038-B — Stable signals / SLO (production-grade observability)
+
+Observability without SLO is just graphs. Add SLO support:
+
+- Define SLO programmatically: `WorkshopSLO { name, metric, threshold, comparison: 'lt'|'gt'|'eq', window: '5m'|'1h'|'24h' }`.
+- Persist in DB table or in `agenttrace.json` config under `slos: []`.
+- Server-side: evaluate SLOs on demand (`workshop_check_slos` MCP tool) and periodically (background job, broadcast violations via WS).
+- Agent-side: agent can query `workshop_check_slos` to know "am I drifting" before user notices.
+
+**Files**: `src/slo/` (new module), `src/mcp/tools.ts`, `drizzle/0005_slos.sql`.
+
+**Effort**: 2-3 days. SLOs are well-understood engineering primitives.
+
+#### F-038-C — Trace replay with reinforcement (counterfactual analysis)
+
+F-006 already has `/api/replay`. Extend to comparison:
+
+- `workshop_replay_and_compare(runId, newPrompt)` — replay with new prompt, then compare traces. Foundation for "did my fix actually help?" workflows.
+- `workshop_what_if(runId, spanId, alternativeInput)` — counterfactual: "what if I'd called tool:bash with these args instead of those?"
+
+**Files**: `src/replay.ts` (extend), `src/mcp/tools.ts`.
+
+**Effort**: 1-2 days. Reuse existing replay infrastructure.
+
+#### F-038-D — Knowledge base over agent history (RAG over traces)
+
+Index all successful traces. Agent queries:
+
+- `workshop_search_similar_solutions(task: string, top_k: int)` — "when in the past did I solve something similar? return the top-3 traces with their resolutions".
+- Implementation: FTS5 over span names + first-message content + final-message content. Reuse `app/src/utils/types.ts` Span types.
+
+**Files**: `src/search/` (extend), `src/mcp/tools.ts`. Reuses F-008 FTS5.
+
+**Effort**: 1-2 days. Mostly search infrastructure already exists.
+
+#### F-038-E — Workflow templates / best practices
+
+- `workshop_get_template_for_run_type(runType: 'build'|'refactor'|'debug'|'test')` — return template that worked historically.
+- Storage: derived from most-successful runs per category.
+- **Optional**: needs labelling on runs (`run_type` column or auto-detection from first span name).
+
+**Files**: `drizzle/0006_run_types.sql`, `src/templates/` (new module).
+
+**Effort**: 3-5 days. Requires run classification infra.
+
+**Naming consideration** (Kolya's question on whether "agenttrace" is too narrow):
+
+After F-038 lands, agenttrace isn't "agent trace debugger" anymore — it's "observability data plane + MCP feedback loop for AI agents". The name **"agenttrace"** is generic enough (it covers the trace data plane). It's NOT "OpenCode Trace" or "LLM Trace" — just **agent trace**, where "agent" can mean any AI agent. So name is fine as-is.
+
+What needs updating is **positioning** in README.md and AGENTS.md — describe agenttrace as "AI agent observability + self-improvement loop", not "OpenCode debugger".
+
+**Acceptance criteria:**
+
+- [ ] F-038-A: `workshop_diagnose_run`, `workshop_compare_runs`, `workshop_find_patterns` MCP tools live and tested.
+- [ ] F-038-B: SLO definition + evaluation + `workshop_check_slos` MCP tool. Configurable via `agenttrace.json`.
+- [ ] F-038-C: `workshop_replay_and_compare`, `workshop_what_if` MCP tools.
+- [ ] F-038-D: `workshop_search_similar_solutions` MCP tool, FTS5 indexed over trace content.
+- [ ] F-038-E: `workshop_get_template_for_run_type` MCP tool (optional, can defer).
+- [ ] Daemon: `bun x tsc --noEmit && bun test tests/` green at each milestone.
+- [ ] Live smoke: agent invokes each tool from OpenCode-side, receives actionable response.
+- [ ] README.md + AGENTS.md updated: position agenttrace as "AI agent observability + feedback loop", not "OpenCode debugger".
+- [ ] Update F-038 (and each sub-F) to Closed; move to `## Closed Features`.
+
+**Effort:** Total 1-2 weeks across all five sub-features. Each sub-feature ships independently; recommended order: A → C → D → B → E.
+
+**Cross-repo impact:** plugin (`agenttrace-opencode-plugin`) unaffected — it only sends spans, doesn't depend on MCP tools. Bridges (Qwen, GigaCode) unaffected.
+
+**Out of scope:**
+
+- **LLM-powered `workshop_suggest_fix`** — requires choosing a model + API key. Defer to F-039.
+- **Multi-tenant SLOs** — single-user agent for now.
+- **Public trace sharing** — security model would need separate F.
+
+**Reference Kolya exchange 2026-09-23:**
+
+- Chat exchange (current session): "мы не просто AI agent observability platform мы же еще даем mcp для агентов чтоб они анализировали [...] что улучшать [...] возможно кроме mcp нам нужно что-то еще".
+- Companion exchange: "наше название не делает нас слишком узко специализированными?" — answered: name is fine, positioning needs update.
+
+**Todos:**
+
+- [ ] Kolya picks F-038-A first (most-impactful, smallest) — or different order
+- [ ] F-038-A: extend `src/mcp/tools.ts` with diagnose / compare / find_patterns
+- [ ] F-038-A: `src/diagnostics/` server-side analysis module
+- [ ] F-038-A: regression tests + agent live smoke
+- [ ] F-038-B: SLO definition + persistence (`drizzle/0005_slos.sql`)
+- [ ] F-038-B: `workshop_check_slos` MCP tool + WS broadcast on violation
+- [ ] F-038-C: replay-and-compare + what-if in `src/replay.ts`
+- [ ] F-038-D: FTS5 indexing over span content
+- [ ] F-038-D: `workshop_search_similar_solutions` MCP tool
+- [ ] F-038-E: run type classification + `workshop_get_template_for_run_type`
+- [ ] Update README.md + AGENTS.md positioning
+- [ ] Update F-038 to Closed; move to `## Closed Features`
+
+---
+
 ## Backlog (not yet started, after F-001..F-005)
 
 - F-006 — Reverse-engineer upstream PRs from `raindrop-ai/workshop` selectively (cherry-pick, not full sync — we want specific patches only)
