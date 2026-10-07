@@ -936,6 +936,121 @@ The `adoptRunByEventId` helper (F-028 closed) was added to handle the case where
 
 ---
 
+### F-035 — Per-agent event_name: distinguish Qwen / GigaCode / mcode / hermes / mistral / zcode / opencode
+
+**Context:** Live UI smoke at 2026-09-23 (screenshot a0022cd383ee/screenshot-1791406800075.png) revealed that the TRAJECTORY block in RunDetail shows `claude_code_session` as a span name (legacy data from before plugin standardization). More importantly, Kolya's question: "we may simply write `agent_session` or somehow understand we're getting traces from qwen or mcode or gigacode?"
+
+The current `event_name` in the wire format is **hardcoded** as `"opencode_session"` in `agenttrace-opencode-plugin/dist/index.js`:
+- Line 1247: `eventName: merged.event_name ?? merged.eventName ?? "opencode_session"`
+- Line 1334: `defaultEventName: opts.defaultEventName ?? "opencode_session"`
+
+That means **every agent that uses the plugin** sends the same `event_name`, regardless of which underlying agent (qwen / gigacode / mcode / hermes / mistral / zcode) is actually producing the trace. Workshop UI can't tell which agent the trace came from.
+
+Per `agenttrace/openspec/config.yaml` HARD rule "OpenCode-only — never add Codex/Claude/Anthropic-specific code", this Feature is allowed because:
+- It doesn't add provider-specific code to the daemon. It adds a **generic discriminator** (`providerId: string`) that any plugin can stamp.
+- Qwen Code (F-035: Qwen Code bridge) and GigaCode (F-035: GigaCode bridge) repos are separate and will ship their own per-agent translations — they pass `providerId: "qwen_code"` or `"gigacode"` upstream.
+- mcode, hermes agent, vibe mistral, zcode are listed by Kolya as supported but not yet integrated — this Feature lays the wire format for them.
+
+**Goal:** every span/track_partial event carries a `providerId` field. Workshop UI shows the source prominently (badge in RunDetail header, filter in RunsPage sidebar, dedicated facet in `/api/facets`). This is a **generic producer schema** — no provider-specific code in daemon.
+
+**Wire format change:**
+
+`POST /v1/events/track_partial` body adds one new field at the top level:
+
+```diff
+ {
+   "event_id": "...",
+   "event_name": "...",
+   "session_id": "...",
+   "run_id": "...",
+   "spans": [...],
++  "providerId": "opencode",  // NEW: "opencode" | "qwen_code" | "gigacode" | "mcode" | "hermes" | "mistral" | "zcode" | "custom:<id>"
+   "properties": {...}
+ }
+```
+
+`runs.drag` table adds a `provider_id` column (nullable TEXT). Old rows default to `"opencode"` or `null`. Migration: `drizzle/0004_provider_id.sql` adds column, idempotent.
+
+**Scope across repos:**
+
+1. **`agenttrace-opencode-plugin/`** (Kolya's fork):
+
+   - Read `providerId` from CLI flag `--provider <id>` (default `"opencode"`), env var `WORKSHOP_PROVIDER_ID`, or `raindrop.json:providerId` config.
+   - Stamp it on every `track_partial` payload.
+   - Update three-site lockstep: `dist/index.js`, `dist/index.cjs`, `~/.config/opencode/plugins/opencode-workshop-plugin.js`.
+   - Bump version `0.1.0 → 0.1.1` (or `0.2.0` if breaking — discuss).
+   - Update bundled SKILL.md to mention `--provider` flag.
+
+2. **`agenttrace-qwen-bridge/`** (F-035: JSON-stream bridge):
+
+   - Bridge stamps `providerId: "qwen_code"` on every span translated to Workshop wire format.
+   - Update wire-contract spec (`ai-docs/specs/F-025-wire-contract.md`) to document the field.
+
+4. **`agenttrace-gigacode-bridge/`** (future repo, similar pattern):
+
+   - Same — stamp `providerId: "gigacode"`.
+
+5. **`agenttrace/` daemon (this repo)**:
+
+   - `src/db/schema.ts` — `runs` table gets `provider_id TEXT` column (nullable for backward compat).
+   - Drizzle migration `drizzle/0004_provider_id.sql`.
+   - `src/db.ts` — `getRuns()` returns provider_id, `searchSpans()` adds `?provider=<id>` filter, `computeFacets()` returns distinct `provider_id` values for `<datalist>` autocomplete.
+   - `src/server.ts` — parse `provider_id` from `track_partial` body, store on run.
+   - `app/src/api/runs.ts` (client) — add `provider_id` to `Run` interface, fetch + display.
+   - `app/src/components/RunDetail.tsx` — add provider badge to ViewHeader (next to existing MODEL/DURATION/USER/CONVO/TRACE badges), use opener filter in sidebar.
+   - `app/src/pages/RunsPage.tsx` — add provider filter dropdown.
+   - `app/src/api/agents.ts` — augment `AgentProviderId` type to `"opencode" | "qwen_code" | "gigacode" | "mcode" | "hermes" | "mistral" | "zcode" | string` (or stricter union).
+   - i18n: add `provider.<id>` strings to `app/src/i18n/locales/{en,ru}.json`.
+
+6. **`mcode`, `hermes`, `mistral`, `zcode` adapters** (not yet built):
+
+   - Each gets its own bridge/plugin. This Feature defines the wire contract; the bridges themselves are separate F-NNN entries (e.g. F-036 — mcode bridge).
+
+**Acceptance criteria:**
+
+- [ ] Plugin accepts `--provider <id>` flag, env var, and config.
+- [ ] Daemon `src/parse.ts` parses `provider_id` from `track_partial` payload.
+- [ ] Daemon stores `provider_id` on `runs` table; new runs include it.
+- [ ] Migration `0004_provider_id.sql` is idempotent and handles existing DBs.
+- [ ] UI shows provider badge in RunDetail header (e.g. "opencode" / "qwen_code" / "gigacode" — colour-coded).
+- [ ] `/api/facets` returns distinct providers for autocomplete.
+- [ ] `/api/search?provider=qwen_code` filter works.
+- [ ] Existing OpenCode traces (event_name="opencode_session", provider_id absent) show provider as "opencode" (default fallback).
+- [ ] `bun x tsc --noEmit && bun test tests/` clean.
+- [ ] Live smoke: run one Qwen trace + one GigaCode trace + one OpenCode trace, verify three separate badges in UI, filters work.
+
+**Effort:** 1-2 days (across all three repos). Cross-repo coordination:
+
+1. Plugin fix lands first (defines `providerId` in wire format).
+2. Daemon fix lands second (accepts and stores).
+3. Bridge fixes land third (Qwen + GigaCode bridges stamp `providerId`).
+
+**Out of scope:**
+
+- **Removing legacy `claude_code_session` span name** from old DB rows (separate migration if Kolya wants).
+- **UI work for legacy span labels** (separate F-NNN if Kolya wants).
+- **mcode / hermes / mistral / zcode bridges** themselves — this Feature just defines the wire contract for them.
+
+**Cross-repo impact:** all three repos. Order matters: plugin → daemon → bridges.
+
+**Todos:**
+
+- [ ] Define wire format delta in plugin README + daemon docs
+- [ ] Plugin: add `--provider` flag + env var + config, stamp on payload
+- [ ] Plugin: 3-site lockstep (dist/{js,cjs} + static copy), bump version
+- [ ] Daemon: schema column + migration
+- [ ] Daemon: parse + store + expose via `/api/runs` + `/api/facets` + `/api/search`
+- [ ] Daemon: provider_id filter in searchSpans + computeFacets
+- [ ] UI: provider badge in RunDetail ViewHeader
+- [ ] UI: provider filter in RunsPage sidebar
+- [ ] UI: i18n keys (`provider.opencode`, `provider.qwen_code`, etc.)
+- [ ] Bridge: stamp `providerId` from Qwen bridge
+- [ ] Bridge: stamp `providerId` from GigaCode bridge
+- [ ] Live smoke: all three providers, verify isolation
+- [ ] Update F-035 to Closed; move to `## Closed Features`
+
+---
+
 ## Backlog (not yet started, after F-001..F-005)
 
 - F-006 — Reverse-engineer upstream PRs from `raindrop-ai/workshop` selectively (cherry-pick, not full sync — we want specific patches only)
