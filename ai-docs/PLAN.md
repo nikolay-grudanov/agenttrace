@@ -1341,6 +1341,141 @@ What needs updating is **positioning** in README.md and AGENTS.md — describe a
 
 ---
 
+### F-039 — Process improvement layer: analyst-agent over executor-agent (system around the agent, not the agent itself)
+
+**Context:** Kolya scenario 2026-09-23 (verbatim): "скорее другой агент будет анализировать что делал первый агент чтоб понять в чем агент ошибся [...] попросили агента написать новый модуль на python для django приложения [...] сотрудники делают хьюман гейт чтоб проверять качество работы ии агента автономного [...] люди посмотрели и сказали что много ошибок и исправили. смотреть потом лагфус или азуруфенкс глазками и что-то искать тяжело, сравнивать коммит агента и потом что внес человек тоже не удобно. и тут появляется наша система, они делает глубокую сборку всего что агент делал [...] другой агент вместо человека посмотрит и скажет как улучшить харнес в широком смысле [...] как улучшить скилы, промты, количество агентов, тулы, количество тулов, правила, структуру репозитория, хуки, ci проверки и пре комит хуки и другое что строится вокруг агента".
+
+This is **NOT F-038** (agent self-improvement over its own traces). F-038 = same agent reads its traces. **F-039 = different agent reads another agent's traces and recommends improvements to the system around that agent** (skills, prompts, tools, repo structure, hooks, CI).
+
+Two-agent pattern:
+
+- **Executor-agent** (e.g. OpenCode with sidepanel) — runs autonomously on a task. Generates spans via the plugin.
+- **Analyst-agent** (any agent that has MCP access) — reads the executor's traces via Workshop MCP, generates **process improvement recommendations**:
+  - Skills (SKILL.md files in `skills/` directory)
+  - Prompts (system prompts, sub-agent invocations, tool prompts)
+  - Number of agents (over-subagent vs under-subagent)
+  - Tools + tool count (missing tools, redundant tools)
+  - Rules (`.clauderc`, code-style configs)
+  - Repo structure (file organization, modular boundaries)
+  - Hooks (pre-commit, CI checks)
+  - CI gates (lint, test, typecheck thresholds)
+
+**Why this matters:** humans bottleneck the autonomous pipeline as the last validation step. If executor-agent makes 20 commits before PR, and reviewer finds 5 errors, **the fix isn't to make the executor smarter — it's to make the system around the executor better** (better skills, fewer tools, clearer prompts). Workshop is the substrate for the analyst-agent to do this analysis systematically.
+
+**Scope of F-039:**
+
+#### F-039-A — Structured artifacts: full capture of what executor did
+
+Workshop today emits spans but doesn't extract structured artifacts in a form an analyst can directly use. Need:
+
+- **Tool usage profile** (`workshop_get_tool_usage(runId)`) — every tool call, with args (truncated to first N chars), result status, latency. Returns shape: `[{ tool, call_count, success_rate, avg_latency_ms, total_tokens, sample_args }]`.
+- **Sub-agent tree** (`workshop_get_subagent_tree(runId)`) — hierarchical tree: who spawned whom, what input/output each got. Already partially in spans via F-003.
+- **Token economics** (`workshop_get_token_economics(runId)`) — input/output tokens per LLM call, cost estimate (if model rates configured), cumulative.
+- **Prompt patterns** (`workshop_get_prompts(runId)`) — extracts all system prompts and sub-agent invocations. Useful for analyst to suggest prompt improvements.
+- **Errors & retries** (`workshop_get_failure_profile(runId)`) — every error, every retry, error→fix flow. Common patterns reveal missing tools or unclear prompts.
+
+**Files**: `src/mcp/tools.ts` (5 new tools), `src/artifacts/` (new module).
+
+**Effort**: 2-3 days. Most of the data is already in spans — just need extraction helpers.
+
+#### F-039-B — Diff vs human fix (git integration)
+
+Kolya's pain point: human reviewer fixes executor's commits. To improve the system, the analyst needs to see **what the human changed**:
+
+- `workshop_get_commit_diff(runId, since_commit, until_commit)` — git diff for the commits the human touched on this PR. Uses `git log` + `git diff` on the run's working directory (need to record cwd in run metadata — already done, see `runs.metadata.cwd`).
+- `workshop_compare_run_vs_diff(runId)` — synthesizes: "executor ran X tools in this order, human fixed by Y". Returns human-actionable summary.
+- **Note**: Workshop doesn't currently track which commits belong to which agent session. Needs **commit attribution**: when executor-agent makes commit, plugin should record the commit SHA on the run. Hook via `git commit --no-verify -m "..." --post-commit-hook` (or `prepare-commit-msg` hook).
+
+**Files**: `src/git/` (new module), `src/mcp/tools.ts`, hook config in plugin.
+
+**Effort**: 2-3 days. Requires plugin-side hook (or git config) to record commit SHAs on runs.
+
+#### F-039-C — Recommendations engine (analyst's output format)
+
+When the analyst-agent generates recommendations, Workshop should **store them somewhere** so they can be reviewed by humans and applied:
+
+- `workshop_recommend(agent: string, runId: string, recommendation: {...})` MCP tool. Analyst pushes recommendations.
+- Storage: `recommendations` table (`drizzle/0007_recommendations.sql`).
+- UI: new page `RecommendationsPage` showing pending/applied recommendations. Apply button to write changes to disk (skills/, prompts, etc.).
+- Recommendation format: `{ kind: 'skill_update' | 'prompt_update' | 'tool_add' | 'tool_remove' | 'rule_add' | 'rule_remove' | 'repo_structure' | 'hook_add' | 'ci_add', path: string, diff: string, rationale: string, confidence: 0-1 }`.
+
+**Files**: `src/mcp/tools.ts`, `src/recommendations/` (new module), `app/src/pages/RecommendationsPage.tsx` (new).
+
+**Effort**: 3-4 days. UI is significant.
+
+#### F-039-D — Skill registry / capability map (foundation for analyst)
+
+To recommend "you should add tool X", the analyst needs to know **what tools exist in the ecosystem** and **which the executor used / didn't use**:
+
+- `workshop_get_capability_map()` — list of registered skills, agents, tools, hooks in the repo (read from `skills/` + `.opencode/` + `agenttrace.json`).
+- `workshop_get_skill_gaps(usedTools, registeredTools)` — diff: which registered tools were NOT used by executor? Which tools the executor wanted but don't exist?
+- Foundation for "you should register tool Y because executor tried to use it 5 times and failed" or "you have tool X registered but executor never used it, consider removing".
+
+**Files**: `src/capabilities/` (new module), `src/mcp/tools.ts`.
+
+**Effort**: 1-2 days.
+
+#### F-039-E — Process-level metrics (over multiple runs)
+
+Aggregated over time:
+
+- `workshop_get_process_metrics(since, until)` — "in the last 30 days, executor ran 47 runs, 60% required human fixes. Common failure: tool:bash timeout (12 runs). Most-used tool: read_file (350 calls). Cost: $4.20 total".
+- Drives SLOs (F-038-B) for **process-level** stability: "human-fix rate < 30%", "p95 cost per run < $1.00".
+
+**Files**: `src/metrics/` (new module), `src/mcp/tools.ts`.
+
+**Effort**: 1-2 days. Reuses F-038-B SLO infrastructure.
+
+**Relationship to F-038:**
+
+F-038 = agent improves **itself** based on traces.
+F-039 = different agent (analyst) improves the **system around** the executor based on traces.
+
+Both are needed for the full feedback loop. Recommended order: F-038-A → F-038-C → **F-039-A** → **F-039-D** → **F-039-B** → **F-039-C** → **F-039-E** → F-038-B → F-038-D → F-038-E.
+
+**Naming consideration:**
+
+Kolya's scenario names two agents (executor + analyst). Workshop is the substrate that **both** sit on. The name "agenttrace" doesn't disambiguate which agent is being traced (it traces **all** of them). No rename needed.
+
+**Acceptance criteria:**
+
+- [ ] F-039-A: 5 MCP tools live (`workshop_get_tool_usage`, `workshop_get_subagent_tree`, `workshop_get_token_economics`, `workshop_get_prompts`, `workshop_get_failure_profile`).
+- [ ] F-039-B: `workshop_get_commit_diff`, `workshop_compare_run_vs_diff` MCP tools. Plugin-side hook records commit SHAs on runs.
+- [ ] F-039-C: `workshop_recommend` MCP tool + `recommendations` DB table + `RecommendationsPage` UI.
+- [ ] F-039-D: `workshop_get_capability_map`, `workshop_get_skill_gaps` MCP tools.
+- [ ] F-039-E: `workshop_get_process_metrics` MCP tool.
+- [ ] Daemon: `bun x tsc --noEmit && bun test tests/` green at each milestone.
+- [ ] Live smoke: analyst-agent invokes tools on a real executor trace, generates 3+ recommendations, applies one via UI, verifies system improvement.
+- [ ] Update F-039 to Closed; move to `## Closed Features`.
+
+**Effort:** Total 1-3 weeks across all five sub-features. Each ships independently.
+
+**Cross-repo impact:** plugin (`agenttrace-opencode-plugin`) needs F-039-B hook (commit SHA recording). Bridges unaffected.
+
+**Out of scope:**
+
+- **Self-applying recommendations** (Workshop writes changes to disk automatically). Human reviews + approves via UI first.
+- **Cross-repo recommendations** (one repo's analyst recommends changes to another repo). Single-repo only for now.
+- **Recommendation quality scoring** (does this analyst do better than another?). Defer until F-038-D RAG is mature.
+
+**Reference Kolya exchange 2026-09-23:**
+
+- Companion exchange (current session): "скорее другой агент будет анализировать что делал первый агент чтоб понять в чем агент ошибся [...] как улучшить харнес в широком смысле".
+
+**Todos:**
+
+- [ ] Kolya picks F-039-A first (foundation for everything else) — or different order
+- [ ] F-039-A: 5 MCP tools + `src/artifacts/` extraction module
+- [ ] F-039-A: regression tests + analyst live smoke
+- [ ] F-039-B: git integration + commit SHA recording on plugin side
+- [ ] F-039-B: `workshop_get_commit_diff` + `workshop_compare_run_vs_diff` MCP tools
+- [ ] F-039-C: `workshop_recommend` MCP tool + DB table + UI
+- [ ] F-039-D: capability map + skill gaps MCP tools
+- [ ] F-039-E: process-level metrics MCP tool
+- [ ] Update F-039 to Closed; move to `## Closed Features`
+
+---
+
 ## Backlog (not yet started, after F-001..F-005)
 
 - F-006 — Reverse-engineer upstream PRs from `raindrop-ai/workshop` selectively (cherry-pick, not full sync — we want specific patches only)
