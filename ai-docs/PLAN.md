@@ -838,6 +838,104 @@ For each component, replace hardcoded English strings with `t("namespace.key")` 
 
 ---
 
+### F-033 — Run-detail Issue annotation banner: collapse by default + expand on click
+
+**Context:** Issue annotations surface as a red-bordered banner at the top of RunDetail (`! Issue · {source} · {time ago}` + description body). Live UI smoke at 2026-09-23 (screenshot a0022cd383ee/screenshot-1791406562306.png, run `6225316c`, annotation from OpenCode agent via MCP hook) revealed the banner is rendered **fully expanded** with no collapse affordance:
+
+```
+! Issue · OpenCode · 12m ago
+─────────────────────────────────
+No failures — status OK, 3/3 tool calls succeeded. But this run's
+only input was a context-pruning notice ("2 messages compressed,
+topic: Open Work agent intro"); the 471-char summary body never
+reached the model. It re-ran agent introspection from scratch
+(~22k prompt tokens, 16s) and returned a near-duplicate of the
+previous turn's answer. Also duplicated: a twin run from
+agenttrace-opencode-plugin 0.0.2 exists with the same message_id.
+```
+
+This pushes the rest of RunDetail (Tabs, Stats, Span Tree) far down the page even when the annotation is short. Multi-paragraph OpenCode self-diagnostics will push it even further. No "Show less" / dismiss control in the current rendering.
+
+**Acceptance criteria:**
+
+- [ ] Banner is **collapsed by default** showing only the title (`! Issue · OpenCode · 12m ago`). Body hidden until user clicks "Show more" / expands.
+- [ ] Expand action is keyboard-accessible (Enter/Space when focused).
+- [ ] Long annotations (>200 chars) auto-truncate with "..." and a "Show full annotation" button.
+- [ ] No regression: short annotations (<200 chars) still fully visible after collapse fix (don't make user click for tiny body).
+- [ ] `bun x tsc --noEmit && bun test tests/` clean.
+- [ ] Live UI smoke: open run `6225316c`, verify banner collapsed by default; click "Show more" → full body visible; click "Show less" → back to title-only.
+- [ ] Update F-033 to Closed; move to `## Closed Features`.
+
+**Files to look at:**
+
+- `app/src/components/RunDetail.tsx` — locate the banner render (likely `AnnotationChip` usage with severity styling, or a separate Issue banner block).
+- `app/src/components/AnnotationChip.tsx` — might already support expandable; if so, the banner just needs to default to collapsed.
+
+**Effort:** 1-2 hours.
+
+**Cross-repo impact:** NONE. Pure `app/`-side change.
+
+**Todos:**
+
+- [ ] Locate banner render site
+- [ ] Add collapse state (default collapsed for body > 0 chars)
+- [ ] Add "Show more" / "Show less" buttons
+- [ ] Add keyboard accessibility
+- [ ] Verify tsc + tests + live UI smoke
+
+---
+
+### F-034 — Same `message_id` registered as two separate runs (twin runs bug)
+
+**Context:** Same screenshot as F-033 shows a real upstream bug surfaced by an agent self-diagnostic:
+
+> "Also duplicated: a twin run from `agenttrace-opencode-plugin 0.0.2` exists with the same `message_id`."
+
+This means the **same `message_id`** (an OpenCode-side identifier for an agent message) was ingested twice by Workshop and stored as **two distinct run rows**. Possible causes:
+
+1. **Plugin bug** — `agenttrace-opencode-plugin` emits `track_partial` event twice for the same `message_id`. Two source agents (the plugin and `agenttrace-opencode-plugin 0.0.2` mentioned in the agent's text suggest there are **two plugin versions** both running on the same OpenCode installation, or the plugin self-resends the event).
+2. **Daemon bug** — `src/server.ts` ingest handler at `POST /v1/events/track_partial` doesn't dedupe by `message_id` before calling `upsertEventSpan` / `insertSpan`. Two different runs each get a partial of the same message, both persist as new runs instead of adopting the existing one.
+3. **Race** — Plugin sends event twice within milliseconds (network retry, idempotency key collision), daemon doesn't dedupe.
+
+The `adoptRunByEventId` helper (F-028 closed) was added to handle the case where an existing run gets re-attached by event_id, but it's for `event_id`, not `message_id`. Need to verify if `message_id` is propagated through the wire format (`track_partial` body shape) and whether dedupe keys exist for it.
+
+**Reproduction:**
+
+- Run an OpenCode session that triggers DCP compression mid-stream (the agent's diagnostic is specifically about this scenario).
+- Observe Workshop DB: `SELECT id, event_id, message_id, created_at FROM runs ORDER BY created_at DESC LIMIT 5;` — if two rows have the same `message_id`, this bug is live.
+- Test data: Kolya's screenshot shows run `6225316c` with a duplicate.
+
+**Acceptance criteria:**
+
+- [ ] Reproduce bug locally: trigger same scenario, confirm two rows in DB with identical `message_id`.
+- [ ] Identify root cause: plugin emits twice, daemon doesn't dedupe, or both.
+- [ ] Fix in whichever layer: plugin-side check before emit, OR daemon-side dedupe by `message_id` before `insertRun`/`upsertEventSpan`.
+- [ ] Add regression test: simulate two identical `track_partial` posts within 100ms; assert only one run row exists after.
+- [ ] `bun x tsc --noEmit && bun test tests/` clean.
+- [ ] Live UI smoke: re-run the OpenCode scenario, confirm only one run row, single Run Detail page (no twin).
+- [ ] Update F-034 to Closed; move to `## Closed Features`.
+
+**Files to look at:**
+
+- `agenttrace-opencode-plugin/` — check `EventShipper.emitHelper()` / `track_partial` payload construction; verify `message_id` is stable across emits for the same event.
+- `agenttrace/src/server.ts` — `POST /v1/events/track_partial` handler (~line 774). Look for any dedupe key, especially around `message_id`.
+- `agenttrace/src/db.ts` — `insertSpan`, `upsertEventSpan`, `findRunByEventId`. May need a `findRunByMessageId` + dedupe pattern.
+
+**Effort:** 2-4 hours (depending on whether root cause is plugin or daemon).
+
+**Cross-repo impact:** likely fixes in **both** `agenttrace-opencode-plugin` and `agenttrace`. Need separate commits per repo, with plugin landing first per the cross-repo coordination rule (workshop UI change depends on plugin emitting deduplicated events).
+
+**Todos:**
+
+- [ ] Reproduce: same OpenCode scenario, observe twin runs in DB
+- [ ] Identify root cause (plugin / daemon / both)
+- [ ] Fix at the appropriate layer (plugin emits once, OR daemon dedupes)
+- [ ] Add regression test
+- [ ] Verify tsc + tests + live smoke
+- [ ] Cross-repo coordination: plugin fix lands first, daemon second
+
+---
+
 ## Backlog (not yet started, after F-001..F-005)
 
 - F-006 — Reverse-engineer upstream PRs from `raindrop-ai/workshop` selectively (cherry-pick, not full sync — we want specific patches only)
