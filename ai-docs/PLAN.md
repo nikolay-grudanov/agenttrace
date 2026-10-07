@@ -1023,6 +1023,67 @@ So this Feature is **dramatically smaller than originally scoped**. The `event_n
 
 ---
 
+### F-036 — Change plugin default `event_name` from `"opencode_session"` to `"agent_session"`
+
+**Context:** Kolya decision 2026-09-23 (verbatim): "Поменять только хардкоженный default в плагине ('opencode_session' → 'agent_session'). Новые runs будут с event_name = 'agent_session'. Старые runs останутся opencode_session. UI покажет их как два разных агента."
+
+Reasoning chain Kolya confirmed (verbatim): "eventName: state.eventMetadata?.eventName ?? config.eventName, где eventMetadata собирается из RAINDROP_EVENT_METADATA + метадаты частей промпта, а config.eventName — из конфига."
+
+This is **option A** from the F-036 fork-in-flight discussion:
+
+1. `agent_session` becomes the new default for plugin-generated runs that don't override `event_name`.
+2. **No data migration.** Existing `runs.event_name = "opencode_session"` rows stay as-is. Workshop UI will show them as a separate agent bucket.
+3. **No new env var.** Per F-035 v2 steer, this Feature overrides the `WORKSHOP_EVENT_NAME` env var plan. Per-agent naming still possible via per-message metadata or `raindrop.json:eventName` config (Kolya's chain — 1, 2, 3) — just **no default env var support**.
+4. **No daemon changes.** Daemon already accepts arbitrary `event_name`. Workshop UI already filters by `event_name` in the existing `All agents` dropdown. Old `opencode_session` rows continue to appear alongside new `agent_session` rows.
+
+**Acceptance criteria:**
+
+- [ ] Plugin `dist/index.js` + `dist/index.cjs` + `~/.config/opencode/plugins/opencode-workshop-plugin.js` (three-site lockstep): default string `"opencode_session"` replaced with `"agent_session"` in both occurrences per file:
+  - `loadConfig()` line 1247 (`.esnext` bundle) / 1246 (`.cjs`): `eventName: merged.event_name ?? merged.eventName ?? "opencode_session"` → `?? "agent_session"`.
+  - `EventShipper2` constructor line 1334 (`.esnext`) / 1329 (`.cjs`): `defaultEventName: opts.defaultEventName ?? "opencode_session"` → `?? "agent_session"`.
+- [ ] Plugin `package.json` version bumped `0.1.0 → 0.1.1` (per three-site lockstep rule).
+- [ ] Daemon: no code changes required. Verify `bun x tsc --noEmit && bun test tests/` still green.
+- [ ] Live smoke: open OpenCode session in agent mode, run a QuickTrace. New runs land in DB with `event_name = "agent_session"`. Existing runs (pre-F-036) remain `event_name = "opencode_session"`. Workshop UI `All agents` dropdown lists both.
+- [ ] Source-level smoke: in dev mode (`bun --watch src/index.ts workshop serve`), trigger a synthetic `track_partial` event with no `event_name`. Verify default `"agent_session"` flows through.
+- [ ] Update F-036 to Closed; move to `## Closed Features`.
+
+**Effort:** 30 minutes total (four string replacements + version bump).
+
+**Cross-repo impact:** plugin only. Daemon unchanged (no schema, no wire format change).
+
+**Out of scope:**
+
+- **Data migration of existing `opencode_session` rows** — Kolya explicit "Старые runs останутся opencode_session. UI покажет их как два разных агента." If Kolya later wants to consolidate, that's a separate F-NNN (data migration + idempotency considerations).
+- **The `WORKSHOP_EVENT_NAME` env var** from F-035 (superseded). If Kolya wants per-shell override later, separate F-NNN.
+- **Per-agent bridges** (Qwen `qwen_code_session`, GigaCode `gigacode_session`, etc.) — separate F-NNN, each bridge defaults its own `event_name` when constructed.
+
+**Files to edit:**
+
+- `agenttrace-opencode-plugin/dist/index.js` — lines 1247, 1334
+- `agenttrace-opencode-plugin/dist/index.cjs` — lines 1246, 1329
+- `agenttrace-opencode-plugin/package.json` — `"version": "0.1.0"` → `"0.1.1"`
+- `~/.config/opencode/plugins/opencode-workshop-plugin.js` — static copy, sync from `dist/index.js`
+- `agenttrace-opencode-plugin/skills/instrument-agent/SKILL.md` (if it mentions `opencode_session` default) — refresh doc
+- `agenttrace/ai-docs/PLAN.md` — mark F-036 Closed after the plugin PR lands
+
+**Reference Kolya exchange 2026-09-23:**
+
+- Screenshot `a0022cd383ee/screenshot-1791406800075.png` — original `claude_code_session` discovery, led to F-035.
+- Screenshot `a0022cd383ee/screenshot-1791407418376.png` — Kolya's `All agents` dropdown correction.
+- Plan-only entry written here in current session: 2026-09-23.
+
+**Todos:**
+
+- [ ] Plugin: 4 string replacements (`dist/index.js` × 2 + `dist/index.cjs` × 2)
+- [ ] Plugin: bump `package.json` version `0.1.0 → 0.1.1`
+- [ ] Plugin: refresh `~/.config/opencode/plugins/opencode-workshop-plugin.js` static copy
+- [ ] Plugin: refresh bundled SKILL.md if it mentions `opencode_session` default
+- [ ] Daemon: verify tsc + tests still green (no code changes)
+- [ ] Live smoke: OpenCode QuickTrace, verify `event_name = "agent_session"` in new runs; verify old `opencode_session` runs unchanged
+- [ ] Update F-036 to Closed; move to `## Closed Features`
+
+---
+
 ## Backlog (not yet started, after F-001..F-005)
 
 - F-006 — Reverse-engineer upstream PRs from `raindrop-ai/workshop` selectively (cherry-pick, not full sync — we want specific patches only)
