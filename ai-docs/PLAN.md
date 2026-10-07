@@ -17,7 +17,7 @@
 
 Public release is live (`v0.0.1` on npm under `latest`). Next-up items, in priority order:
 
-- **T1-A. Sync upstream `raindrop-ai/workshop` v0.1.21** — we're 8 commits behind upstream. Decided to scope three Features instead of one big merge: F-026 (CSP + `RAINDROP_WORKSHOP_ALLOWED_HOSTS`, v0.1.16 + v0.1.17 hardening), F-027 (OTLP `gen_ai.usage.prompt_tokens` / `completion_tokens` aliases, v0.1.17), F-028 (rename run + Download trace JSON, v0.1.20 + v0.1.21; migration `0002_flowery_shinobi_shaw` → our `0003_runs_display_name.sql` because our `0002_fts5_spans` already occupies idx 2). Skipped: image content parts (v0.1.18, reverted+re-shipped — wait for upstream to settle), Cloud removal already done locally (F-001), Claude/Codex surface excluded by F-002. ~3-4 hours.
+- **T1-A. ~~Sync upstream `raindrop-ai/workshop` v0.1.21~~ Closed 2026-09-23.** Upstream stable since 2026-08-22 (no new releases). Of the 8 commits behind us at sync time, F-026 (CSP + `ALLOWED_HOSTS`, v0.1.16/17), F-027 (`gen_ai.usage.prompt_tokens` aliases, v0.1.17), and F-028 (Rename + Display, v0.1.20/21) landed as separate Features during 2026-09-18. Remaining 5 commits covered either reverted code (v0.1.18 image-rendering PR + revert), `src/cloud/setup.ts` (F-001 removed our `src/cloud/`), or `install.sh --project=SLUG` (cloud-only). F-029 (2026-09-23) takes the one remaining piece — the `extractText` safety guard from v0.1.18 `8aa2d33` that survived the image-rendering revert. **Sync is now complete.**
 - **T1-B. Git LFS for binaries** — current `binaries/raindrop-linux-x64` (79 MB) and `raindrop-windows-x64.exe` (99 MB) trigger GitHub "large file" warning on every push. Migrating to LFS silences the warning and speeds up `git clone`. ~1 hour.
 - **T1-C. macOS / linux-arm64 binaries** — only linux-x64 + win32-x64 ship today. Either expand `bin/raindrop.js` to support more platforms (requires cross-compile in CI on darwin host for ad-hoc signing) or document source-build as the only path. Open question: do we even own the platform set, or keep it narrow on purpose?
 - **T1-D. Build a real src/index.ts + tsup pipeline for the plugin** — currently the plugin ships only hand-edited `dist/index.{js,cjs}` (no source). This was fine for the alpha but blocks normal dev cycles (PR review, typecheck, lint, tests). Spec: feature F-002 originally. ~1-2 days.
@@ -31,6 +31,34 @@ The plugin-side T1-D (`loadConfig` cwd bug) is also open — see `ai-docs/specs/
 
 ## Active Features
 
+
+### F-029 — `extractText` safety guard for `image`/`file` content blocks
+
+**Context:** upstream `raindrop-ai/workshop` `v0.1.18` (`8aa2d33`) shipped a `messageParsing.ts` refactor that, among its many image-rendering helpers, also added one defensive guard in `extractText`: `if (c.type === "image" || c.type === "file") return ""`. The image-rendering PR itself was later reverted in `4510cdd` (it landed too early), but **this single safety line stayed in upstream** because it is a parser-level invariant, independent of how the renderer later decides to display images. We did not pick it up during the F-026/F-027/F-028 sync (which scoped strictly to security, OTLP aliases, and Download/Rename — none of which required touching the message parser).
+
+The bug shape, verified locally: a `messages[]` content block of shape `{type:"image", text:"iVBORw0KGgo..."}` (or any variant where an SDK/plugin crams base64 into a `text` or `content` field) currently falls through to the trailing `if (typeof c.text === "string") return c.text` branch in our `extractText`, surfacing the base64 as the canonical message text. `MessageList` then renders those raw bytes inside a markdown bubble. Today the markdown sanitiser mostly turns them into literal text, but the same payload would let a future image-rendering path interpret the message as a `data:image/png;base64,...` HTML src — a real XSS-class risk once #31-style image rendering is reintroduced.
+
+**Result (this commit):** `app/src/utils/messageParsing.ts:extractText` returns `""` for any block with `type === "image"` or `type === "file"`, before the fall-through to `c.text`/`c.content`. Parser-level invariant: no image/file block can contribute its base64 to rendered message text.
+
+**Acceptance criteria (all met):**
+- [x] `app/src/utils/messageParsing.ts` — new guard `if (c.type === "image" || c.type === "file") return ""` inserted between `tool_result` and `c.text` branches, with rationale comment referencing F-029 + upstream `8aa2d33`.
+- [x] `tests/message-parsing.test.ts` (new) — 4 tests: image-only turn → no base64 in result; image alongside text → sibling text survives, base64 dropped; file block with `image/*` mediaType dropped; **the regression test that actually fails without the guard** — an image block whose `text` field is set to base64 returns no base64 (without F-029 this surfaces `"iVBORw0KGgo..."` as message content).
+- [x] `bun x tsc --noEmit` clean (root + app — both go through the same project).
+- [x] `bun test tests/` 138 pass / 0 fail (was 134 before F-029; +4 from new file).
+- [x] `./node_modules/.bin/eslint app/src/utils/messageParsing.ts tests/message-parsing.test.ts` — 0 errors, 0 warnings.
+- [x] Regression direction verified live this session by commenting out the guard, running the test file, observing 1 fail with `Received: "iVBORw0KGgoAAAAN..."` (test #4 catches the leak), restoring the guard, observing all 4 pass. Test file is not decorative — it pins the invariant.
+- [ ] Live UI smoke (deferred to Kolya per "no daemon restart by the assistant"). Source-mode verification is sufficient — no schema/migration change, no new endpoint, no rendered UI change for our existing image-free OpenCode traces.
+
+**Out of scope (deliberately not taken from upstream):**
+- `extractImageSrc` / `toImageSrc` / `safeInlineMediaType` / `normalizeBase64` / `safeRemoteImageUrl` / `MAX_INLINE_IMAGE_BASE64_CHARS = 10MB` / `SAFE_INLINE_IMAGE_MEDIA_TYPES` — image-rendering helpers from the same v0.1.18 PR, reverted upstream (`4510cdd`). Not our problem until someone reintroduces image rendering, at which point we'd take a more mature implementation than `59f80a2`.
+- `Message.images` field on the `Message` interface + `MessageImages` React component + `canEditReplayMessage` gate — all from v0.1.18, reverted upstream, not used by OpenCode today.
+- `replay.ts` change in v0.1.18 (`isReplayProviderMessage` gained a `typeof message.content === "string"` check). Not relevant — our fork does not run replay on user-side (`Replay` is upstream-only and we don't wire it).
+- Upstream v0.1.19 `install.sh --project=SLUG` / `src/cloud/setup.ts` — `src/cloud/` was removed by F-001 in this fork. The installer change is purely about cloud setup, which we don't ship.
+- Upstream v0.1.20/v0.1.21 — already covered by F-028 (Rename run + Download trace JSON).
+
+**Cross-repo impact:** NONE. This is a pure `app/`-side change; no plugin, no daemon, no schema, no wire format.
+
+**Reference:** upstream commits `8aa2d33` (image guard added) + `4510cdd` (image-rendering reverted, guard kept). Verified locally that `messageParsing.ts` upstream at `8aa2d33` already contains the guard at the same position.
 
 ### F-028 — Rename run + Download trace as JSON
 

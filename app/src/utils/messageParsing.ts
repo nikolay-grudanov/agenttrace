@@ -14,6 +14,14 @@ function extractText(c: unknown): string {
   if (c.type === "text" && typeof c.text === "string") return c.text;
   if (c.type === "tool_use") return "";
   if (c.type === "tool_result") return "";
+  // F-029: image/file blocks carry base64 payloads in `image`, `source.data`,
+  // or `data` — never as text. Without this guard, a fall-through to the
+  // `c.text`/`c.content` branches below could leak base64 as a "text" message
+  // (worst case: rendered into MessageList's markdown as raw bytes; could
+  // also be interpreted as an `<img src="data:...">` if downstream ever
+  // adds image rendering). Mirrors upstream `8aa2d33` (v0.1.18) intent — the
+  // image-rendering PR was reverted, but this safety guard stayed in upstream.
+  if (c.type === "image" || c.type === "file") return "";
   if (typeof c.text === "string") return c.text;
   if (typeof c.content === "string") return c.content;
   return "";
