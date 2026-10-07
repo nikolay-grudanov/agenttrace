@@ -936,117 +936,89 @@ The `adoptRunByEventId` helper (F-028 closed) was added to handle the case where
 
 ---
 
-### F-035 — Per-agent event_name: distinguish Qwen / GigaCode / mcode / hermes / mistral / zcode / opencode
+### F-035 — Use `event_name` (not new `providerId` field) to distinguish qwen / gigacode / mcode / hermes / mistral / zcode / opencode
 
-**Context:** Live UI smoke at 2026-09-23 (screenshot a0022cd383ee/screenshot-1791406800075.png) revealed that the TRAJECTORY block in RunDetail shows `claude_code_session` as a span name (legacy data from before plugin standardization). More importantly, Kolya's question: "we may simply write `agent_session` or somehow understand we're getting traces from qwen or mcode or gigacode?"
+**Context:** Live UI smoke at 2026-09-23 (screenshot a0022cd383ee/screenshot-1791406800075.png, screenshot-1791407418376.png) revealed:
 
-The current `event_name` in the wire format is **hardcoded** as `"opencode_session"` in `agenttrace-opencode-plugin/dist/index.js`:
-- Line 1247: `eventName: merged.event_name ?? merged.eventName ?? "opencode_session"`
-- Line 1334: `defaultEventName: opts.defaultEventName ?? "opencode_session"`
+1. TRAJECTORY shows `claude_code_session` as a span name (legacy data — no live source emits this).
+2. **The RunsPage left-sidebar already has an `All agents` dropdown** populated from the existing `event_name` values in the DB. Kolya's screenshot shows it listing: `code-agent`, `diagram-agent`, `f011-test`, `f014-test`, `kolya-dashboard`, `opencode_session`, `test-project`. **The discriminator already exists and already works** — Workshop UI already filters runs by `event_name`.
 
-That means **every agent that uses the plugin** sends the same `event_name`, regardless of which underlying agent (qwen / gigacode / mcode / hermes / mistral / zcode) is actually producing the trace. Workshop UI can't tell which agent the trace came from.
+Kolya's correction (verbatim): "/steer это не хардкор, у нас в env параметрах можно задавать имена и в выпадающем списке они есть".
 
-Per `agenttrace/openspec/config.yaml` HARD rule "OpenCode-only — never add Codex/Claude/Anthropic-specific code", this Feature is allowed because:
-- It doesn't add provider-specific code to the daemon. It adds a **generic discriminator** (`providerId: string`) that any plugin can stamp.
-- Qwen Code (F-035: Qwen Code bridge) and GigaCode (F-035: GigaCode bridge) repos are separate and will ship their own per-agent translations — they pass `providerId: "qwen_code"` or `"gigacode"` upstream.
-- mcode, hermes agent, vibe mistral, zcode are listed by Kolya as supported but not yet integrated — this Feature lays the wire format for them.
+So this Feature is **dramatically smaller than originally scoped**. The `event_name` field in the wire format already does everything Kolya asked for. The plugin just needs to send **different `event_name` strings** for different agents, and the UI dropdown picks them up automatically. **No new wire format field, no schema migration, no new UI code, no i18n keys.**
 
-**Goal:** every span/track_partial event carries a `providerId` field. Workshop UI shows the source prominently (badge in RunDetail header, filter in RunsPage sidebar, dedicated facet in `/api/facets`). This is a **generic producer schema** — no provider-specific code in daemon.
+**The original (superseded) F-035 plan** — adding a `providerId` field, schema migration, new UI badge, new i18n keys — was over-engineered. Replaced by this simpler approach below.
 
-**Wire format change:**
+**Goal:** plugin stamps **per-agent `event_name`** based on `WORKSHOP_EVENT_NAME` env var (or `raindrop.json:eventName` config). For Kolya's stack:
 
-`POST /v1/events/track_partial` body adds one new field at the top level:
+- `WORKSHOP_EVENT_NAME=qwen_code_session` → plugin stamps `event_name: "qwen_code_session"`
+- `WORKSHOP_EVENT_NAME=gigacode_session` → plugin stamps `event_name: "gigacode_session"`
+- `WORKSHOP_EVENT_NAME=mcode_session` → plugin stamps `event_name: "mcode_session"`
+- `WORKSHOP_EVENT_NAME=hermes_session` → plugin stamps `event_name: "hermes_session"`
+- `WORKSHOP_EVENT_NAME=mistral_session` → plugin stamps `event_name: "mistral_session"`
+- `WORKSHOP_EVENT_NAME=zcode_session` → plugin stamps `event_name: "zcode_session"`
+- Default (no env var, no config): `event_name: "opencode_session"` (preserves existing behaviour).
 
-```diff
- {
-   "event_id": "...",
-   "event_name": "...",
-   "session_id": "...",
-   "run_id": "...",
-   "spans": [...],
-+  "providerId": "opencode",  // NEW: "opencode" | "qwen_code" | "gigacode" | "mcode" | "hermes" | "mistral" | "zcode" | "custom:<id>"
-   "properties": {...}
- }
-```
-
-`runs.drag` table adds a `provider_id` column (nullable TEXT). Old rows default to `"opencode"` or `null`. Migration: `drizzle/0004_provider_id.sql` adds column, idempotent.
+**No daemon-side changes.** No schema migration. No new UI code. No i18n keys. The existing `/api/runs?agent=<event_name>` filter and the existing `All agents` dropdown in `RunsPage.tsx` automatically pick up the new values.
 
 **Scope across repos:**
 
-1. **`agenttrace-opencode-plugin/`** (Kolya's fork):
+1. **`agenttrace-opencode-plugin/`** — change default `event_name` from `"opencode_session"` to read from:
+   - Env var `WORKSHOP_EVENT_NAME` (highest priority).
+   - `raindrop.json:eventName` config (fallback).
+   - Default `"opencode_session"` (preserves existing).
+   - Three-site lockstep: `dist/index.js`, `dist/index.cjs`, `~/.config/opencode/plugins/opencode-workshop-plugin.js`.
+   - Bump version `0.1.0 → 0.1.1`.
+   - Document in SKILL.md.
 
-   - Read `providerId` from CLI flag `--provider <id>` (default `"opencode"`), env var `WORKSHOP_PROVIDER_ID`, or `raindrop.json:providerId` config.
-   - Stamp it on every `track_partial` payload.
-   - Update three-site lockstep: `dist/index.js`, `dist/index.cjs`, `~/.config/opencode/plugins/opencode-workshop-plugin.js`.
-   - Bump version `0.1.0 → 0.1.1` (or `0.2.0` if breaking — discuss).
-   - Update bundled SKILL.md to mention `--provider` flag.
+2. **`agenttrace-qwen-bridge/`** — JSON-stream bridge. Qwen bridge already produces events; it should:
+   - Default to `event_name: "qwen_code_session"` instead of any hardcoded `"opencode_session"`.
+   - Or read env var `BRIDGE_EVENT_NAME` for full flexibility.
+   - Update wire-contract spec `ai-docs/specs/F-025-wire-contract.md`.
 
-2. **`agenttrace-qwen-bridge/`** (F-035: JSON-stream bridge):
+3. **`agenttrace-gigacode-bridge/`** (future repo, when built):
+   - Default to `event_name: "gigacode_session"`.
 
-   - Bridge stamps `providerId: "qwen_code"` on every span translated to Workshop wire format.
-   - Update wire-contract spec (`ai-docs/specs/F-025-wire-contract.md`) to document the field.
+4. **`mcode`, `hermes`, `mistral`, `zcode` bridges** (not yet built):
+   - Each defaults to `event_name: "<agent>_session"` when constructed.
 
-4. **`agenttrace-gigacode-bridge/`** (future repo, similar pattern):
-
-   - Same — stamp `providerId: "gigacode"`.
-
-5. **`agenttrace/` daemon (this repo)**:
-
-   - `src/db/schema.ts` — `runs` table gets `provider_id TEXT` column (nullable for backward compat).
-   - Drizzle migration `drizzle/0004_provider_id.sql`.
-   - `src/db.ts` — `getRuns()` returns provider_id, `searchSpans()` adds `?provider=<id>` filter, `computeFacets()` returns distinct `provider_id` values for `<datalist>` autocomplete.
-   - `src/server.ts` — parse `provider_id` from `track_partial` body, store on run.
-   - `app/src/api/runs.ts` (client) — add `provider_id` to `Run` interface, fetch + display.
-   - `app/src/components/RunDetail.tsx` — add provider badge to ViewHeader (next to existing MODEL/DURATION/USER/CONVO/TRACE badges), use opener filter in sidebar.
-   - `app/src/pages/RunsPage.tsx` — add provider filter dropdown.
-   - `app/src/api/agents.ts` — augment `AgentProviderId` type to `"opencode" | "qwen_code" | "gigacode" | "mcode" | "hermes" | "mistral" | "zcode" | string` (or stricter union).
-   - i18n: add `provider.<id>` strings to `app/src/i18n/locales/{en,ru}.json`.
-
-6. **`mcode`, `hermes`, `mistral`, `zcode` adapters** (not yet built):
-
-   - Each gets its own bridge/plugin. This Feature defines the wire contract; the bridges themselves are separate F-NNN entries (e.g. F-036 — mcode bridge).
+5. **No daemon changes.** No UI changes. No schema migration.
 
 **Acceptance criteria:**
 
-- [ ] Plugin accepts `--provider <id>` flag, env var, and config.
-- [ ] Daemon `src/parse.ts` parses `provider_id` from `track_partial` payload.
-- [ ] Daemon stores `provider_id` on `runs` table; new runs include it.
-- [ ] Migration `0004_provider_id.sql` is idempotent and handles existing DBs.
-- [ ] UI shows provider badge in RunDetail header (e.g. "opencode" / "qwen_code" / "gigacode" — colour-coded).
-- [ ] `/api/facets` returns distinct providers for autocomplete.
-- [ ] `/api/search?provider=qwen_code` filter works.
-- [ ] Existing OpenCode traces (event_name="opencode_session", provider_id absent) show provider as "opencode" (default fallback).
-- [ ] `bun x tsc --noEmit && bun test tests/` clean.
-- [ ] Live smoke: run one Qwen trace + one GigaCode trace + one OpenCode trace, verify three separate badges in UI, filters work.
+- [ ] Plugin reads `WORKSHOP_EVENT_NAME` env var first, then `raindrop.json:eventName`, then defaults to `"opencode_session"`.
+- [ ] When `WORKSHOP_EVENT_NAME=qwen_code_session`, every `track_partial` payload from the plugin carries `event_name: "qwen_code_session"`.
+- [ ] Workshop UI `All agents` dropdown shows the new `event_name` value automatically (verified by running a Qwen trace and refreshing the page).
+- [ ] Filtering the RunsPage by the new event_name shows only runs from that agent.
+- [ ] Existing OpenCode traces (`event_name="opencode_session"`) still filter correctly — backward compatibility preserved.
+- [ ] Plugin version bumped to `0.1.1`, three-site lockstep updated.
+- [ ] `bun x tsc --noEmit && bun test tests/` clean in daemon (no changes expected, but verify).
+- [ ] Live smoke: set `WORKSHOP_EVENT_NAME=qwen_code_session`, run a Qwen trace, see it appear in `All agents` dropdown as a new option, filter by it.
 
-**Effort:** 1-2 days (across all three repos). Cross-repo coordination:
-
-1. Plugin fix lands first (defines `providerId` in wire format).
-2. Daemon fix lands second (accepts and stores).
-3. Bridge fixes land third (Qwen + GigaCode bridges stamp `providerId`).
+**Effort:** 1-2 hours (plugin change is small: read env var, fall through to config, fall through to default). No daemon work.
 
 **Out of scope:**
 
 - **Removing legacy `claude_code_session` span name** from old DB rows (separate migration if Kolya wants).
-- **UI work for legacy span labels** (separate F-NNN if Kolya wants).
-- **mcode / hermes / mistral / zcode bridges** themselves — this Feature just defines the wire contract for them.
+- **Visual provider indicator** in RunDetail header — currently no badge, but the `All agents` dropdown filter is sufficient.
+- **The mcode / hermes / mistral / zcode bridges themselves** (separate F-NNN when those are built).
+- **No daemon changes** — the discriminator `event_name` already works end-to-end.
 
-**Cross-repo impact:** all three repos. Order matters: plugin → daemon → bridges.
+**Cross-repo impact:** plugin only (the other repos already produce `event_name` correctly via their own conventions — just need to make sure they default to the right value for their agent).
+
+**Reference screenshots from 2026-09-23:**
+
+- `a0022cd383ee/screenshot-1791406800075.png` — original `claude_code_session` discovery.
+- `a0022cd383ee/screenshot-1791407418376.png` — Kolya's correction showing existing `All agents` dropdown with `code-agent`, `diagram-agent`, `f011-test`, etc.
 
 **Todos:**
 
-- [ ] Define wire format delta in plugin README + daemon docs
-- [ ] Plugin: add `--provider` flag + env var + config, stamp on payload
-- [ ] Plugin: 3-site lockstep (dist/{js,cjs} + static copy), bump version
-- [ ] Daemon: schema column + migration
-- [ ] Daemon: parse + store + expose via `/api/runs` + `/api/facets` + `/api/search`
-- [ ] Daemon: provider_id filter in searchSpans + computeFacets
-- [ ] UI: provider badge in RunDetail ViewHeader
-- [ ] UI: provider filter in RunsPage sidebar
-- [ ] UI: i18n keys (`provider.opencode`, `provider.qwen_code`, etc.)
-- [ ] Bridge: stamp `providerId` from Qwen bridge
-- [ ] Bridge: stamp `providerId` from GigaCode bridge
-- [ ] Live smoke: all three providers, verify isolation
+- [ ] Plugin: add `WORKSHOP_EVENT_NAME` env var + `raindrop.json:eventName` config read; thread through `EventShipper2`
+- [ ] Plugin: 3-site lockstep (dist/{js,cjs} + static copy)
+- [ ] Plugin: bump version `0.1.0 → 0.1.1`
+- [ ] Plugin: document in bundled SKILL.md (or README) — `WORKSHOP_EVENT_NAME=qwen_code_session` for Qwen, etc.
+- [ ] Qwen bridge: stamp `event_name: "qwen_code_session"` by default
+- [ ] Live smoke: run OpenCode trace (default behaviour unchanged) + Qwen trace (via env var) + verify both appear in dropdown
 - [ ] Update F-035 to Closed; move to `## Closed Features`
 
 ---
