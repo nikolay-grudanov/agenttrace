@@ -667,34 +667,60 @@ C) **SpanDetail parent + children** (`app/src/components/SpanDetail.tsx` + `app/
 
 ---
 
-### F-030 — MessagePane.tsx Claude-specific UI refactor
+### F-030 — MessagePane.tsx Claude-shell UI removal (Option A — delete)
 
-**Context:** F-002 cleanup stopped short of `app/src/components/MessagePane.tsx` (2248 lines) because the file mixes OpenCode-sidepanel runtime (F-006) with Claude-specific UI that has no server backing. The dead-code Claude parts left in:
+**Context:** F-002 cleanup (commit `5e1c44f`, 2026-09-23) stopped short of `app/src/components/MessagePane.tsx` (2248 lines) because the file mixes OpenCode-sidepanel runtime (F-006) with Claude-specific UI that has no server backing. Live UI smoke on 2026-09-23 confirmed **two sidepanel branches inside `MessagePane.tsx`** selected by some condition (likely `provider === "claude"`):
 
-- Local type definitions (lines 17-90): `interface ClaudeChatMessage`, `interface ClaudeSessionSummary`, `interface ClaudeSessionDetail extends ClaudeSessionSummary`, `interface ClaudeAskUserQuestion`, `interface ClaudeAskQuestion`, `interface ClaudeMessageStream`, plus `AgentStreamEvent` and `AgentLoadout` (which mirror the API/chat types but as local copies because MessagePane doesn't import from `api/chat.ts`).
-- `useWorkshopEvent("claude_ask_user_question")` handler at line 487 — listens for events the server never broadcasts (`broadcast("claude_ask_user_question", ...)` doesn't exist in `src/server.ts`).
+1. **OpenCode-shell** — works. Visible on most runs (Convo tab, OpenCode agent). Has header `< All Chats`, "New chat" title, workspace path with "Change" button, preset chips (e.g. "Что здесь сломалось?", "Какие инструменты Workshop мне доступны?"), chat input ("Спросить про этот ран...") with send button. Button in Run Detail: `>_ Ask OpenCode`. Backend wired via F-006 — `/api/agent/messages`, `/api/agent/sessions`, `/api/agent/loadout`, `/api/agent/provider` all work.
+
+2. **Claude-shell** — dead. Renders on some runs (Convo tab for run `62253` observed live). Visible elements: header "Connect your coding agent", subtitle "Ask questions about traces and resume chats from your terminal", two badge buttons "Claude Code" (large, active) + "Codex" (small, inactive), single CTA button "Connect Claude Code", footer "Your Recent Claude Code Chats" + "No chats yet". After clicking Connect, transitions to: header "Claude Code", fake branch row "digital-architecture" with green dot, "New chat" button (dead — no input below it). **No `<input>` or `<textarea>` in DOM** — user cannot type anything. `Ask Claude Code` button in Run Detail does the same thing. **No server backing**: `src/server.ts` has zero `/api/claude/...` routes, `broadcast("claude_ask_user_question")` doesn't exist, `/api/claude/ask-user-question/:id/answer` returns 404.
+
+**Decision (Kolya, 2026-09-23):** **Option (A) — delete Claude-shell entirely.** User verdict: "удалить всю Claude Code UI, и runtime-server-side bridge. Мы делаем наше решения для opencode, gigacode, mcode, hermes agent, vibe mistral, zcode." Option B (rewrite Claude-shell into OpenCode-shell) declined because Claude-shell never produced visible behavior anyway, and OpenCode-shell already exists in the same file.
+
+**Dead-code parts identified in `MessagePane.tsx`:**
+
+- Local type definitions (lines 17-90): `interface ClaudeChatMessage`, `interface ClaudeSessionSummary`, `interface ClaudeSessionDetail extends ClaudeSessionSummary`, `interface ClaudeAskUserQuestion`, `interface ClaudeAskQuestion`, `interface ClaudeMessageStream`, plus local copies `AgentStreamEvent` and `AgentLoadout` (MessagePane.tsx doesn't import from `api/chat.ts`).
+- `useWorkshopEvent("claude_ask_user_question")` handler at line 487 — listens for events the server never broadcasts.
 - `useWorkshopEvent("claude_ask_user_question_resolved")` handler at line 504 — same.
 - `fetch("/api/claude/ask-user-question/:id/answer", { method: "POST", body: JSON.stringify({ answers }) })` at line 698 — endpoint doesn't exist server-side.
-- `<div id="claude-slash-menu">` UI at lines 1530 and 989 — DOM-rendered but driven by no live data.
+- `<div id="claude-slash-menu">` UI at lines 930 and 989 — DOM-rendered but driven by no live data.
+- The provider-conditional branch (`if (provider === "claude") showClaudeShell else showOpenCodeShell`) — **the actual switching point**. Must be located and removed so the OpenCode-shell becomes the only path.
 
-**Why this needs its own Feature:** cleaning this up requires a UX decision Kolya must make. Two paths:
+**Out of scope (kept for after this commit):**
 
-(a) **Delete the Claude-specific UI entirely** — remove the local interfaces, the useWorkflowEvent handlers, the slash-menu DOM, the fetch call. The `Claude*` local types can be renamed to `Agent*` for consistency with `api/chat.ts`. Cost: we lose any UX surfaces where the user could see Claude-style slash-commands (which never worked anyway). Likely zero user impact since the dead code never produced visible behavior.
+- `app/src/utils/helpers.ts:80` — provider string detection (`if (s.includes("claude") || s.includes("anthropic")) return { label: "Anthropic" }`). Generic, not integration-specific. If user later runs OpenCode with Anthropic backend, still labels correctly.
+- `app/src/components/RunDetail.tsx:79-81` — `DEFAULT_REPLAY_MODEL_FALLBACKS = ["claude-sonnet-4-6", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"]`. EditReplayModal dropdown options, real user UX.
+- `app/src/components/EmptyState.tsx:43` — `Cline` entry (claude-dev in URI is the Cline VSCode extension ID, not Claude Code).
+- `src/spans/adapters/ai-sdk.ts:14` — comment-only mention.
+- Local rename `Claude*` types → `Agent*` for consistency with `api/chat.ts`. This is a separate cleanup pass if desired; not required for Option A.
+- `src/skills.compiled.ts` claude-agent-sdk mentions (docs, F-031).
 
-(b) **Rewrite the local interfaces to `Agent*` and rewire the slash-menu to OpenCode's actual loadout** — keep the slash-menu feature alive, but drive it from the OpenCode-sidepanel flow that F-006 actually wired up (`getAgentLoadout()` → `/api/agent/loadout`). Cost: ~half-day to read MessagePane and rewire, plus a decision on slash-menu UX.
+**Work plan for next session:**
 
-Recommendation: option (a). The slash-menu was never wired to live data; option (b) is feature work that doesn't have a Kolya-stated user need.
+1. Read `app/src/components/MessagePane.tsx` end-to-end (2248 lines). Identify the exact provider-conditional branch that switches between Claude-shell and OpenCode-shell.
+2. Grep for all `Claude*` references in the file to make sure no other places reference them outside the dead-code block.
+3. Delete the dead-code block entirely (or replace the conditional with `if (true) showOpenCodeShell` if the surrounding structure is hard to untangle).
+4. Rename local `Claude*` types to `Agent*` IF the rename is mechanical and doesn't tangle imports — otherwise leave for a follow-up.
+5. Remove the `Ask Claude Code` button in RunDetail that triggers the Claude-shell path.
+6. Verify: `bun x tsc --noEmit && bun test tests/` clean. Live UI smoke: Convo tab for both kinds of runs (the one that triggered Claude-shell, e.g. `62253`, and the one that triggers OpenCode-shell, e.g. `783f4c93`) should both render OpenCode-shell now.
+7. Update F-030 to `Closed YYYY-MM-DD` and move to `## Closed Features`.
 
-**Effort:** 4-6 hours for option (a), 1 day for option (b). Trivial regression bar: `bun x tsc --noEmit && bun test tests/` stays green.
+**Effort:** 4-6 hours. Trivial regression bar: tsc + bun test stay green.
 
-**Out of scope:** `helpers.ts:80` (provider-string detection — kept), `RunDetail.tsx:79-81` (model fallback list for EditReplayModal — kept), `EmptyState.tsx:43` Cline entry (not Claude Code — kept), `src/skills.compiled.ts` claude-agent-sdk mentions (docs, F-031).
+**Cross-repo impact:** NONE. Pure `app/`-side change.
+
+**Handoff:** see `ai-docs/specs/handoff/F-030-claude-shell-handoff.md` (to be written on next-session start — must include the exact conditional pattern in MessagePane.tsx, plus a screenshot of Claude-shell for reference, plus the OpenCode-shell reference screenshot so the visual baseline is captured).
 
 **Todos:**
-- [ ] Kolya picks option (a) or option (b)
-- [ ] (option a) delete Claude-specific local types, handlers, fetch, slash-menu DOM
-- [ ] (option b) rename local `Claude*` types to `Agent*`, rewire slash-menu to OpenCode loadout
+- [ ] Start next session: write handoff doc with screenshots from this session + grep evidence
+- [ ] Locate provider-conditional in `MessagePane.tsx` that branches Claude vs OpenCode shell
+- [ ] Grep all `Claude*` references in `MessagePane.tsx` to map the full dead-code region
+- [ ] Decide: hard-delete vs `if (true) showOpenCodeShell` substitution
+- [ ] Delete dead-code region + `Ask Claude Code` button in RunDetail
+- [ ] (optional) rename remaining `Claude*` types to `Agent*`
 - [ ] `bun x tsc --noEmit && bun test tests/` clean
-- [ ] Live UI smoke
+- [ ] Live UI smoke on `62253` + `783f4c93` (and a few other runs in between to confirm no regressions)
+- [ ] Update F-030 to Closed; move to `## Closed Features`
 
 ---
 
