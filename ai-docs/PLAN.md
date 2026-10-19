@@ -13,18 +13,20 @@
 
 ---
 
-## Roadmap (Tier 1, next-up) — 2026-10-08
+## Roadmap (Tier 1, next-up) — 2026-10-19
 
-Stack state: both packages published on npm under the new `agenttrace` names (`0.0.2`), GitHub repos renamed, upstream sync complete (F-026…F-029), Claude/Codex surface stripped (F-002). Current wave: identity/config cleanup + the F-038/F-039 strategic expansion (observability → agent feedback loop).
+Stack state: both packages published on npm under the new `agenttrace` names (`0.0.2`), GitHub repos renamed, upstream sync complete (F-026…F-029), Claude/Codex surface stripped (F-002). Plugin migrated to the OpenCode v2 plugin API (F-040, committed `fc0fc1e`). Current wave: **the naming migration** (F-025 + F-036 + F-037/F-042 + F-043 as one breaking `0.1.0`) + the F-038/F-039 strategic expansion (observability → agent feedback loop).
 
-- **T1-A. F-036 — plugin default `event_name` → `"agent_session"`** (~30 min) — 4 string replacements across the two bundles + version bump `0.0.2 → 0.0.3`. Smallest open item; unlocks clean per-agent buckets in the `All agents` dropdown.
-- **T1-B. F-037 — `RAINDROP_*` → `AGENTTRACE_*` env vars + `raindrop.json` → `agenttrace.json`** (~4–6 h, plugin repo) — blocked on 3 Kolya decisions (back-compat? `process.execPath.endsWith` check? LICENSE attribution). Ships as `0.1.0`.
+- **T1-0. Naming migration → one breaking `0.1.0`** (Kolya 2026-10-19 locked the shape: rename env vars, **do not** rename `~/.raindrop/` on-disk paths, **no** back-compat). Consists of T1-A (F-036), T1-B (F-037 + F-042), T1-E2 (F-043), T1-H (F-025). Publish is Kolya-gated; nothing is committed yet.
+- **T1-A. F-036 — plugin default `event_name` → `"agent_session"`** (~30 min) — 4 string replacements across the two bundles. Smallest open item; unlocks clean per-agent buckets in the `All agents` dropdown. Now rides the `0.1.0` wave.
+- **T1-B. F-037 (spec) / F-042 (plugin) — `RAINDROP_*` → `AGENTTRACE_*` env vars + `raindrop.json` → `agenttrace.json`** (~2–3 h plugin + ~4–6 h spec work, done) — **12** plugin env vars, 5 config paths, new `AGENTTRACE_EVENT_NAME` resolution level. Back-compat question **closed** (hard cut). Still open: `process.execPath.endsWith("raindrop")` handling and the "Raindrop AI" attribution.
 - **T1-C. F-033 — Issue-annotation banner collapsed by default** (~1–2 h) — quick UI win; run `6225316c` is the repro.
 - **T1-D. F-030 — delete the dead Claude-shell from `MessagePane.tsx`** (~4–6 h) — Option A locked by Kolya 2026-09-23; write the handoff doc first.
 - **T1-E. F-034 — twin-runs bug (`message_id` ingested as two runs)** (~2–4 h, cross-repo plugin + daemon) — needs a repro; plugin side lands first.
 - **T1-F. F-032 — full i18n sweep** (~1–2 days) — includes the preset-prompt bug (RU UI sends an EN prompt to OpenCode).
 - **T1-G. F-031 — skills/ docs: drop Claude-Agent-SDK framing** (~1–2 h).
-- **T1-H. F-025 — CLI command `raindrop` → `agenttrace`** (~7–10 h) — blocked on Kolya answers to Q1/Q2/Q4 (env-vars, DB path, subcommand shape).
+- **T1-E2. F-043 — daemon `RAINDROP_*` runtime env vars → `AGENTTRACE_*`** (~3–4 h, env only) — **45** unique vars, grep-verified. On-disk paths (`~/.raindrop/**`) explicitly **not** renamed (Kolya 2026-10-19). Must ship in the same `0.1.0` as F-037/F-042 because the plugin's F-006 sidepanel writes `RAINDROP_WORKSHOP_*` into the generated `opencode.json` that this daemon reads.
+- **T1-H. F-025 — CLI command `raindrop` → `agenttrace`** (~5–7 h, was 7–10 h) — **all questions closed** by Kolya on 2026-10-19: Q1 rename env (hard cut, no dual), Q2 **keep** `~/.raindrop/` paths (Stage 3 dropped), Q4 accept **both** `agenttrace serve` and `agenttrace workshop serve`. Q5 version `0.0.3` superseded — now rides `0.1.0`.
 - **T1-I. F-038-A / F-039-A — feedback-loop foundations** (1–2 weeks, ship per sub-feature) — strategic direction: MCP self-diagnosis + analyst-agent artifacts. Recommended order in F-038/F-039 entries.
 - **T1-J. Git LFS for binaries** (~1 h) — 79 MB / 99 MB files still trigger the GitHub large-file warning on every push.
 - **T1-K. macOS / linux-arm64 binaries** — open question: expand the matrix or document source-build as the only path.
@@ -223,6 +225,134 @@ Kolya's scenario names two agents (executor + analyst). Workshop is the substrat
 
 ---
 
+### F-043 — Rename daemon `RAINDROP_*` runtime env vars to `AGENTTRACE_*` (env only, no path renames) — OPEN (not started)
+
+**Context:** Kolya 2026-10-19, verbatim: «1. Файлы настроек» демона не переименовать везде · 2. да нужно переменовать · 3. жёстко, "пользователи сами переменуют"». Follow-up the same day: «2. убери тоже, достаточно в ридми описания что это форк и ссылки на проект оригинал» — the "Raindrop AI" attribution leaves `LICENSE` / `AGENTS.md` and moves to `README.md` as an explicit fork notice.
+
+Translated: env var **names** are renamed everywhere; **on-disk paths are not renamed at all**; no back-compat shim. This feature is the daemon-side counterpart of F-037 / F-042 (plugin env + `raindrop.json` → `agenttrace.json`).
+
+F-025 previously scoped this as "Q1: 5 daemon env vars". A grep inventory on 2026-10-19 (`grep -rhoE 'RAINDROP_[A-Z_]+' src app/src scripts drizzle bin package.json`) found **45 unique vars** — F-025's list was an order of magnitude short, which is why this got its own feature.
+
+**Env var rename map — 45 vars (grep inventory 2026-10-19):**
+
+| Old (`RAINDROP_*`) | New (`AGENTTRACE_*`) | Hits | Area |
+|---|---|---|---|
+| `RAINDROP_LOCAL_DEBUGGER` | `AGENTTRACE_LOCAL_DEBUGGER` | 20 | plugin + daemon |
+| `RAINDROP_CHANNEL` | `AGENTTRACE_CHANNEL` | 18 | installer/updater |
+| `RAINDROP_QUIET` | `AGENTTRACE_QUIET` | 15 | installer |
+| `RAINDROP_INSTALL_DIR` | `AGENTTRACE_INSTALL_DIR` | 15 | installer |
+| `RAINDROP_VERBOSE` | `AGENTTRACE_VERBOSE` | 14 | installer |
+| `RAINDROP_MANIFEST_URL` | `AGENTTRACE_MANIFEST_URL` | 14 | updater |
+| `RAINDROP_WORKSHOP_URL` | `AGENTTRACE_WORKSHOP_URL` | 8 | workshop + sidepanel |
+| `RAINDROP_WORKSHOP_PORT` | `AGENTTRACE_WORKSHOP_PORT` | 7 | workshop |
+| `RAINDROP_VERSION__` | `AGENTTRACE_VERSION__` | 7 | updater (dunder-suffixed) |
+| `RAINDROP_SKIP_SETUP` | `AGENTTRACE_SKIP_SETUP` | 7 | installer |
+| `RAINDROP_NO_COLOR` | `AGENTTRACE_NO_COLOR` | 6 | installer |
+| `RAINDROP_CLOUD` | `AGENTTRACE_CLOUD` | 6 | cloud mode |
+| `RAINDROP_CHANNEL_EXPLICIT` | `AGENTTRACE_CHANNEL_EXPLICIT` | 6 | installer |
+| `RAINDROP_PRESET_PROMPTS` | `AGENTTRACE_PRESET_PROMPTS` | 5 | setup |
+| `RAINDROP_INSECURE_PROTO` | `AGENTTRACE_INSECURE_PROTO` | 5 | installer |
+| `RAINDROP_WORKSHOP_DB_PATH` | `AGENTTRACE_WORKSHOP_DB_PATH` | 4 | workshop (path inside — value unchanged) |
+| `RAINDROP_WORKSHOP_ALLOWED_HOSTS` | `AGENTTRACE_WORKSHOP_ALLOWED_HOSTS` | 4 | workshop |
+| `RAINDROP_WORKSHOP_AGENT_PROVIDER` | `AGENTTRACE_WORKSHOP_AGENT_PROVIDER` | 4 | workshop + plugin sidepanel |
+| `RAINDROP_ENDPOINT` | `AGENTTRACE_ENDPOINT` | 4 | cloud |
+| `RAINDROP_WORKSHOP_ANNOTATION_SOURCE` | `AGENTTRACE_WORKSHOP_ANNOTATION_SOURCE` | 3 | plugin sidepanel |
+| `RAINDROP_SETUP_TTY` | `AGENTTRACE_SETUP_TTY` | 3 | installer |
+| `RAINDROP_SEED_SALT` | `AGENTTRACE_SEED_SALT` | 3 | crypto |
+| `RAINDROP_NO_SETUP` | `AGENTTRACE_NO_SETUP` | 3 | installer |
+| `RAINDROP_BIN_PATH_ENV` / `RAINDROP_BIN_PATH` | `AGENTTRACE_BIN_PATH_ENV` / `AGENTTRACE_BIN_PATH` | 3+3 | launcher |
+| `RAINDROP_WORKSHOP_OPENCODE_BIN` | `AGENTTRACE_WORKSHOP_OPENCODE_BIN` | 2 | workshop |
+| `RAINDROP_WORKSHOP_BIND_HOST` | `AGENTTRACE_WORKSHOP_BIND_HOST` | 2 | workshop |
+| `RAINDROP_WORKSHOP_ALLOWED_ORIGINS` | `AGENTTRACE_WORKSHOP_ALLOWED_ORIGINS` | 2 | workshop |
+| `RAINDROP_VERSION` | `AGENTTRACE_VERSION` | 2 | updater |
+| `RAINDROP_SKIP_INIT` | `AGENTTRACE_SKIP_INIT` | 2 | installer |
+| `RAINDROP_SIDEPANEL_ACTIVE` | `AGENTTRACE_SIDEPANEL_ACTIVE` | 2 | plugin F-006 (also F-042) |
+| `RAINDROP_SECRET_STORE_PATH_ENV` | `AGENTTRACE_SECRET_STORE_PATH_ENV` | 2 | credentials |
+| `RAINDROP_MCP_TOOLS` | `AGENTTRACE_MCP_TOOLS` | 2 | MCP |
+| `RAINDROP_DRIP_ITEMS_URL` / `RAINDROP_DRIP_CLAIM_URL` | `AGENTTRACE_DRIP_*` | 2+2 | cloud drip |
+| `RAINDROP_CLOUD_TOOL_NAMES` | `AGENTTRACE_CLOUD_TOOL_NAMES` | 2 | cloud |
+| `RAINDROP_WRITE_KEY` | `AGENTTRACE_WRITE_KEY` | 1 | auth |
+| `RAINDROP_WORKSHOP_UI_PORT` | `AGENTTRACE_WORKSHOP_UI_PORT` | 1 | workshop |
+| `RAINDROP_WORKSHOP_SECRET_STORE_PATH` | `AGENTTRACE_WORKSHOP_SECRET_STORE_PATH` | 1 | workshop |
+| `RAINDROP_WORKSHOP_OPENCODE_AGENT` | `AGENTTRACE_WORKSHOP_OPENCODE_AGENT` | 1 | workshop |
+| `RAINDROP_SKIP_WORKSPACE_ACTIVATE` | `AGENTTRACE_SKIP_WORKSPACE_ACTIVATE` | 1 | bootstrap |
+| `RAINDROP_SKIP_WORKSHOP_START` | `AGENTTRACE_SKIP_WORKSHOP_START` | 1 | bootstrap |
+| `RAINDROP_SKIP_STARTUP` | `AGENTTRACE_SKIP_STARTUP` | 1 | bootstrap |
+| `RAINDROP_SIDEPANEL_RUN_ID` | `AGENTTRACE_SIDEPANEL_RUN_ID` | 1 | plugin F-006 (also F-042) |
+| `RAINDROP_OPENAI_API_KEY` | `AGENTTRACE_OPENAI_API_KEY` | 1 | auth |
+| `RAINDROP_LOCAL_WORKSHOP_URL` | `AGENTTRACE_LOCAL_WORKSHOP_URL` | 1 | F-025 Q1 |
+| `RAINDROP_DEMO_CHAT_MODEL` | `AGENTTRACE_DEMO_CHAT_MODEL` | 1 | demo |
+| `RAINDROP_ASSETS_BASE_URL__` | `AGENTTRACE_ASSETS_BASE_URL__` | 1 | UI assets |
+
+**Explicitly NOT renamed (Kolya 2026-10-19):**
+
+- `~/.raindrop/` directory and everything under it: `raindrop_workshop.db`, `.pid`, `.port`, `.log`, `.startup.log`, `install-registry.json`, `ui-cache/<VERSION>/dist`, `agents.yaml`, `agents.json`, `replay-projects.json`, `bin/raindrop`, `bin/raindrop.prev`, `trace.log`.
+- Env vars whose **value** contains a `~/.raindrop/...` path (`RAINDROP_WORKSHOP_DB_PATH`, `RAINDROP_SECRET_STORE_PATH_ENV`) keep the same default value — only the variable's own name changes.
+- Bundled binary filenames (`binaries/raindrop-linux-x64`, `build/bun/raindrop-bun-*`) — F-025 keeps `PLATFORM_MAP` keys unchanged.
+- `bin/raindrop-dev` (upstream-owned bash launcher).
+
+**Files to edit:**
+
+- `src/index.ts` — installer env, `install-registry.json` path (path value unchanged), `RAINDROP_*` reads.
+- `src/update.ts` — `RAINDROP_MANIFEST_URL`, `RAINDROP_CHANNEL`, `RAINDROP_VERSION`, `bin/raindrop` + `bin/raindrop.prev` (path values unchanged).
+- `src/db.ts` — `RAINDROP_WORKSHOP_DB_PATH` lookup only (line 26 default path stays `.raindrop/raindrop_workshop.db`).
+- `src/workshop-startup.ts` — `RAINDROP_WORKSHOP_PORT`, `RAINDROP_WORKSHOP_URL`, `RAINDROP_WORKSHOP_BIND_HOST`.
+- `src/uninstall.ts` — `RAINDROP_*` reads around the pid/port/log artifacts (values unchanged).
+- `src/ui-assets.ts` — `RAINDROP_ASSETS_BASE_URL__`, `ui-cache/<VERSION>` path value unchanged.
+- `src/agents-config.ts` — `RAINDROP_*` reads; `.raindrop/agents.yaml` path value unchanged.
+- `src/install/sync.ts`, `src/skills.compiled.ts` (⚠️ **generated** — edit the `agents.yaml` source and regenerate, do not hand-edit).
+- `app/src/hooks/use-agents.ts` — `RAINDROP_*` reads.
+- `app/src/components/MessagePane.tsx` (line ~1976) — UI prefix detection for `mcp__raindrop__` / `mcp__raindrop_workshop__` / `raindrop_workshop.`. **Old runs in the DB keep their old tool prefixes**, so this detection needs to keep matching the legacy prefix (dual-detect) even after the env rename.
+- `scripts/install.sh`, `scripts/upgrade-path-smoke.sh`, `scripts/fresh-install.sh` — installer exports.
+- `README.md` env table, `AGENTS.md` quick reference.
+
+**Backwards compatibility — RESOLVED (Kolya 2026-10-19):** hard cut, same as F-037/F-042. No dual-read of `RAINDROP_*`, no deprecation warning. Scripts in the wild that export `RAINDROP_*` will silently stop working — release notes must list the full 45-var table.
+
+**Acceptance criteria:**
+
+- [ ] All 45 vars renamed `RAINDROP_*` → `AGENTTRACE_*` across `src/`, `app/src/`, `scripts/`, `bin/`, `package.json`.
+- [ ] Grep for `RAINDROP_[A-Z_]+` returns **zero** runtime reads (comments, upstream credits `@raindrop-ai/*`, and npm-dep namespaces exempt).
+- [ ] `src/skills.compiled.ts` regenerated from its source, not hand-edited.
+- [ ] `MessagePane.tsx` still highlights legacy `mcp__raindrop__*` tool calls in historical runs.
+- [ ] `~/.raindrop/**` paths byte-identical before and after the change (verified by `ls -la ~/.raindrop` diff).
+- [ ] `README.md` + `AGENTS.md` env tables updated.
+- [ ] **"Raindrop AI" attribution removed from `LICENSE` + `AGENTS.md`** (Kolya 2026-10-19) — the fork credit moves to `README.md`: explicit "this is a fork of raindrop-ai/workshop" + links to the upstream repo, npm packages and site. `package.json` `description` rewritten in fork form with the upstream link. Executed in the same pass as F-037 / F-042 so the three repos stay consistent.
+- [ ] Ships in the same breaking `0.1.0` release as F-025 + F-036 + F-037/F-042.
+- [ ] Live smoke: start the daemon with only `AGENTTRACE_*` env set, confirm workshop boots and traces land.
+- [ ] Update F-043 to Closed; move to `## Closed Features`.
+
+**Effort:** 3-4 hours (mostly mechanical; the risky bits are `skills.compiled.ts` regeneration and the `MessagePane.tsx` dual-detect).
+
+**Cross-repo impact:** `agenttrace-opencode-plugin` must ship F-042 in the same release — the plugin's F-006 sidepanel block writes `RAINDROP_WORKSHOP_URL` / `RAINDROP_WORKSHOP_AGENT_PROVIDER` / `RAINDROP_WORKSHOP_ANNOTATION_SOURCE` into its generated `opencode.json`, which the daemon then reads. Renaming one side without the other breaks the sidepanel.
+
+**Out of scope:**
+
+- `~/.raindrop/` on-disk paths and all their filenames (Kolya, 2026-10-19).
+- Binary filenames `binaries/raindrop-*`, `build/bun/raindrop-bun-*`.
+- `bin/raindrop-dev`.
+- `@raindrop-ai/*` npm dependency namespaces (upstream SDK).
+- `HANDOFF-*.md`, `openspec/changes/archive/*` — historical audit trail.
+- MCP **tool names** (`mcp__workshop__*`) — not env vars.
+- **NOT out of scope anymore:** the LICENSE dual-copyright / "Raindrop AI" attribution. Kolya closed this on 2026-10-19 — remove it and put the fork credit (with links to the upstream repo, npm packages and site) in `README.md` instead. Same pass as F-037 / F-042.
+
+**Reference:** Kolya exchange 2026-10-19 (verbatim, quoted at the top of F-037 in this PLAN).
+
+**Todos:**
+
+- [ ] Re-grep `RAINDROP_[A-Z_]+` to confirm the 45-var list is still current before starting.
+- [ ] Mechanical rename in `src/` (12 files).
+- [ ] Mechanical rename in `app/src/` (2 files, plus `MessagePane.tsx` dual-detect).
+- [ ] Mechanical rename in `scripts/` (3 shell scripts).
+- [ ] Mechanical rename in `bin/`.
+- [ ] Regenerate `src/skills.compiled.ts` from source.
+- [ ] Verify zero runtime `RAINDROP_*` reads remain.
+- [ ] Verify `~/.raindrop/**` unchanged (before/after diff).
+- [ ] Update README.md + AGENTS.md env tables.
+- [ ] Verify F-042 (plugin) writes the matching `AGENTTRACE_WORKSHOP_*` env names.
+- [ ] Update F-043 to Closed; move to `## Closed Features`
+
+---
+
 ### F-038 — Agent feedback loop: MCP tools for self-diagnosis + SLO + trace replay + knowledge base
 
 **Context:** Kolya observation 2026-09-23 (verbatim): "мы не просто AI agent observability platform мы же еще даем mcp для агентов чтоб они анализировали этот самый observability и могли понимать что не так и что надо делать и что улучшать чтоб все работало более стабильно. возможно кроме mcp нам нужно что-то еще добавить или расширить его или еще что-то".
@@ -348,6 +478,22 @@ What needs updating is **positioning** in README.md and AGENTS.md — describe a
 
 **Audit 2026-10-08:** version references below predate the `0.1.0 → 0.0.2` correction. When implemented after F-036, this ships as `0.1.0` (breaking): `0.0.3 → 0.1.0`.
 
+**Audit 2026-10-19 (Kolya decisions, verbatim):**
+
+> «1. Файлы настроек» демона не переименовать везде
+> 2. да нужно переменовать
+> 3. жёстко, «пользователи сами переименуют»
+> 4. Добавь фичу в репу
+
+Translated to engineering decisions:
+
+1. **Env vars — YES, rename.** `RAINDROP_*` → `AGENTTRACE_*` everywhere (plugin: F-037/F-042; daemon: F-043).
+2. **Daemon's on-disk paths — DO NOT rename, anywhere.** `~/.raindrop/` directory, `raindrop_workshop.db`, `.pid`, `.port`, `.log`, `.startup.log`, `install-registry.json`, `ui-cache/`, `agents.yaml`, `agents.json`, `replay-projects.json`, `bin/raindrop`, `bin/raindrop.prev` — all stay. This resolves **F-025 Q2 = KEEP** and drops F-025 Stage 3 (DB path migration) entirely.
+3. **Back-compat — hard NO** ("пользователи сами переименуют"). No dual-read, no deprecation warnings, no fallback. This supersedes F-025's "dual-support for one minor cycle" recommendation — the whole stack ships one breaking release.
+4. **Add the mirror Feature to the plugin repo** — `F-042` in `agenttrace-opencode-plugin/ai-docs/PLAN.md` (this F-037 lives in the daemon repo PLAN per the project convention, but it is plugin work).
+
+**Version chain (Kolya 2026-10-19):** one breaking `0.1.0` for the whole naming migration — F-025 (CLI) + F-036 (`event_name` default) + F-037/F-042 (plugin env + config) + F-043 (daemon env). This supersedes F-025 Q5 (`0.0.3`) and F-036's `0.0.3`.
+
 **Context:** Kolya decision 2026-09-23 (verbatim): "да надо и надо все переменовать в имя нашего проекта, надо убрать raindrop [...] то есть тут везде agenttrace".
 
 After F-024 (2026-09-17) renamed the repo + npm package + bin name from `opencode-workshop`/`raindrop` to `agenttrace`/`agenttrace-opencode-plugin`, **runtime configuration** still uses the old upstream names. Kolya wants **all** `raindrop` references gone from the plugin runtime:
@@ -369,20 +515,26 @@ After F-024 (2026-09-17) renamed the repo + npm package + bin name from `opencod
 
 Note: F-036 will land before F-037 (or simultaneously). F-036 sets default = `"agent_session"`; F-037 renames env vars + config + adds `AGENTTRACE_EVENT_NAME` to the resolution chain.
 
-**Env var rename map (10 vars):**
+**Env var rename map (12 vars — grep-verified 2026-10-19):**
 
-| Old (`RAINDROP_*`) | New (`AGENTTRACE_*`) |
-|---|---|
-| `RAINDROP_API_URL` | `AGENTTRACE_API_URL` |
-| `RAINDROP_WRITE_KEY` | `AGENTTRACE_WRITE_KEY` |
-| `RAINDROP_PROJECT_ID` | `AGENTTRACE_PROJECT_ID` |
-| `RAINDROP_LOCAL_WORKSHOP_URL` | `AGENTTRACE_LOCAL_WORKSHOP_URL` |
-| `RAINDROP_LOCAL_DEBUGGER` | `AGENTTRACE_LOCAL_DEBUGGER` |
-| `RAINDROP_WORKSHOP` | `AGENTTRACE_WORKSHOP` |
-| `RAINDROP_DEBUG` | `AGENTTRACE_DEBUG` |
-| `RAINDROP_CAPTURE_SYSTEM_PROMPT` | `AGENTTRACE_CAPTURE_SYSTEM_PROMPT` |
-| `RAINDROP_TRACE_ONLY` | `AGENTTRACE_TRACE_ONLY` |
-| `RAINDROP_EVENT_METADATA` | `AGENTTRACE_EVENT_METADATA` |
+| Old (`RAINDROP_*`) | New (`AGENTTRACE_*`) | Where |
+|---|---|---|
+| `RAINDROP_API_URL` | `AGENTTRACE_API_URL` | plugin |
+| `RAINDROP_WRITE_KEY` | `AGENTTRACE_WRITE_KEY` | plugin + daemon |
+| `RAINDROP_PROJECT_ID` | `AGENTTRACE_PROJECT_ID` | plugin + daemon |
+| `RAINDROP_LOCAL_WORKSHOP_URL` | `AGENTTRACE_LOCAL_WORKSHOP_URL` | plugin + daemon |
+| `RAINDROP_LOCAL_DEBUGGER` | `AGENTTRACE_LOCAL_DEBUGGER` | plugin + daemon |
+| `RAINDROP_WORKSHOP` | `AGENTTRACE_WORKSHOP` | plugin |
+| `RAINDROP_DEBUG` | `AGENTTRACE_DEBUG` | plugin |
+| `RAINDROP_CAPTURE_SYSTEM_PROMPT` | `AGENTTRACE_CAPTURE_SYSTEM_PROMPT` | plugin |
+| `RAINDROP_TRACE_ONLY` | `AGENTTRACE_TRACE_ONLY` | plugin |
+| `RAINDROP_EVENT_METADATA` | `AGENTTRACE_EVENT_METADATA` | plugin |
+| `RAINDROP_SIDEPANEL_ACTIVE` | `AGENTTRACE_SIDEPANEL_ACTIVE` | plugin (F-006 sidepanel) |
+| `RAINDROP_SIDEPANEL_RUN_ID` | `AGENTTRACE_SIDEPANEL_RUN_ID` | plugin (F-006 sidepanel) |
+
+The last two were missing from the original 10-var table — grep on 2026-10-19 found them in the F-006 sidepanel bootstrap block (`const sidepanelMode = … process.env.RAINDROP_SIDEPANEL_ACTIVE === "1"` and `process.env.RAINDROP_SIDEPANEL_RUN_ID`). Adding them to the plugin's generated `opencode.json` (`RAINDROP_WORKSHOP_*` environment block) is part of **F-043**.
+
+The daemon's own 45 `RAINDROP_*` vars (`RAINDROP_LOCAL_DEBUGGER` ×20, `RAINDROP_CHANNEL` ×18, `RAINDROP_QUIET` ×15, `RAINDROP_INSTALL_DIR` ×15, `RAINDROP_VERBOSE` ×14, `RAINDROP_MANIFEST_URL` ×14, `RAINDROP_WORKSHOP_URL` ×8, `RAINDROP_WORKSHOP_PORT` ×7, …) are **out of scope here** — see **F-043**.
 
 **Config filename rename map:**
 
@@ -419,46 +571,75 @@ Field names stay the same — only the file name and env var prefixes change.
 - `agenttrace-opencode-plugin/README.md` — install instructions, env var table, upstream credit, LICENSE reference.
 - `agenttrace-opencode-plugin/AGENTS.md` — historical references to upstream.
 
-**`process.execPath.endsWith("raindrop")` runtime detection:**
+**`process.execPath.endsWith("raindrop")` runtime detection — RESOLVED (Kolya 2026-10-19): drop the check.**
 
-Currently at line 2429 in `dist/index.js`. This is checking if the plugin is running inside the upstream `raindrop` binary (vs `node` / `bun` / `agenttrace`). Renaming this is tricky — there is no `agenttrace` binary name yet. Kolya's bin launcher is `bin/agenttrace.js` (script that spawns `binaries/agenttrace-linux-x64`), but the actual binary name is `agenttrace-linux-x64` (per F-024). Decision needed: rename detection to `endsWith("agenttrace")` (matches both the launcher and the binary), or keep `endsWith("raindrop")` for back-compat detection, or drop the check entirely (since we ARE the only consumer now).
+> «1. выкинь проверку»
 
-**Backward compatibility — Kolya decision needed:**
+Inside the F-006 sidepanel bootstrap block of `dist/index.js` (line numbers shifted by F-040 — the adapter block added ~380 lines above it; re-grep before editing):
 
-Per F-024, Kolya chose **no back-compat** when renaming repo+npm+bin (0.0.1 alpha → 0.0.2 patch → 0.1.0 minor). Consistent with that:
+```js
+const isCompiled = (process.execPath || "").toLowerCase().endsWith("raindrop");
+const command = isCompiled
+  ? [process.execPath, "workshop", "mcp"]
+  : ["bun", daemonSrc, "workshop", "mcp"];   // daemonSrc resolved via existsSync over 2 candidates (F-040 fix)
+```
+
+**Delete the check entirely.** Replace with a shape-based decision that does not reference a product name:
+
+- If `process.execPath` points at something that is not an interpreter (`node`, `bun`, `deno`) → it is the bundled binary → `[process.execPath, "workshop", "mcp"]`.
+- Otherwise (running under an interpreter) → `["bun", daemonSrc, "workshop", "mcp"]`.
+
+Rationale: F-025 keeps the bundled filenames as `raindrop-linux-x64` (`PLATFORM_MAP` keys unchanged), so `endsWith("agenttrace")` would never match anyway — the check is dead code that still carries a legacy product name into every future grep.
+
+**Backward compatibility — RESOLVED (Kolya 2026-10-19):**
+
+> «3. жёстко, "пользователи сами переименуют"»
+
+**No back-compat. Hard cut.**
 
 - **No fallback to old `raindrop.json`** — read only `agenttrace.json`. Users must rename their config.
 - **No fallback to old `RAINDROP_*` env vars** — read only `AGENTTRACE_*`. Users must rename env vars.
-
-If Kolya wants back-compat (read both, prefer new, log migration warning), this expands F-037 effort by ~30%.
+- **No deprecation warnings, no dual-read, no migration shim.** This is consistent with F-024's no-back-compat choice and with F-025 Q3 (bin alias DROP).
+- Consequence: the plugin will silently fall back to defaults (`localhost:5899`) if a user forgets to rename — documented as a breaking change in the release notes for `0.1.0`.
+- Supersedes F-025 Q1's "dual-support for one minor cycle" recommendation.
 
 **Acceptance criteria:**
 
-- [ ] All 10 `RAINDROP_*` env vars renamed to `AGENTTRACE_*` in both `dist/index.js` and `dist/index.cjs`.
+- [ ] All 12 `RAINDROP_*` env vars renamed to `AGENTTRACE_*` in both `dist/index.js` and `dist/index.cjs` (10 from the original table + `RAINDROP_SIDEPANEL_ACTIVE` + `RAINDROP_SIDEPANEL_RUN_ID`).
 - [ ] All 5 `raindrop.json` config paths renamed to `agenttrace.json`.
 - [ ] `AGENTTRACE_EVENT_NAME` env var added as a new resolution level (between per-message and `agenttrace.json`).
-- [ ] `process.execPath.endsWith("raindrop")` decision made (rename to `endsWith("agenttrace")` OR drop entirely).
-- [ ] All `raindrop` mentions in `package.json` description, README.md, AGENTS.md updated to `agenttrace` (or kept as upstream credit — Kolya decides).
-- [ ] Plugin `package.json` version bumped `0.1.1 → 0.2.0` (this is a breaking change for existing users with `RAINDROP_*` env vars — semver minor).
+- [ ] `process.execPath.endsWith("raindrop")` check **deleted**, replaced with an interpreter-shape check (resolved 2026-10-19).
+- [ ] No `RAINDROP_*` / `raindrop.json` fallback anywhere — verified by grep returning zero runtime reads of the old names (comments and upstream credits exempt).
+- [ ] `LICENSE` and `AGENTS.md`: "Raindrop AI" attribution **removed** (resolved 2026-10-19). Credit moves to `README.md` as an explicit fork notice with links to the upstream project (GitHub + npm + site).
+- [ ] All other `raindrop` mentions in `package.json` description and README.md rewritten to the `agenttrace` fork wording.
+- [ ] Plugin `package.json` version bumped `0.0.2 → 0.1.0` (breaking: existing users with `RAINDROP_*` env vars must rename — semver minor).
 - [ ] Three-site lockstep updated: `dist/index.js`, `dist/index.cjs`, `~/.config/opencode/plugins/opencode-workshop-plugin.js`.
 - [ ] Static copy file name kept (`opencode-workshop-plugin.js`) — loader-compat with existing OpenCode installations.
+- [ ] `~/.config/opencode/raindrop.json` → `agenttrace.json` renamed on Kolya's machine (content unchanged — field names are stable).
+- [ ] Release notes for `0.1.0` list the 12 env vars + the config filename as breaking changes.
 - [ ] Live smoke: set `AGENTTRACE_EVENT_NAME=qwen_code_session`, run a trace, verify Workshop UI dropdown shows `qwen_code_session` as a new agent.
-- [ ] Update F-037 to Closed; move to `## Closed Features`.
+- [ ] Update F-037 and F-042 to Closed; move to `## Closed Features`.
 
 **Effort:** 4-6 hours (mostly mechanical renames in two bundles, plus one new feature: `AGENTTRACE_EVENT_NAME` env var).
 
-**Cross-repo impact:** plugin only. Daemon unaffected.
+**Cross-repo impact:**
+
+- `agenttrace-opencode-plugin/` — **F-042** is the mirror of this feature and lives in that repo's own PLAN (project convention: every feature has an entry in its own repo). This F-037 is the daemon-repo copy of the spec.
+- `agenttrace/` daemon — **F-043** renames the daemon's own `RAINDROP_*` runtime env vars (45 of them, grep inventory). Kolya explicitly excluded on-disk paths (`~/.raindrop/*`) from renaming.
 
 **Out of scope:**
 
-- **Renaming daemon-side `RAINDROP_*`** — daemon (`agenttrace/`) doesn't use `RAINDROP_*` env vars (uses `RAINDROP_WORKSHOP_*`). F-024 addressed it. Verify no leakage.
-- **Renaming LICENSE dual-copyright** — "Raindrop AI + Nikolai Grudanov" stays as historical credit.
+- **Renaming daemon on-disk paths** — Kolya 2026-10-19: «Файлы настроек» демона не переименовать **везде**. `~/.raindrop/` (and `raindrop_workshop.db`, `.pid`, `.port`, `.log`, `.startup.log`, `install-registry.json`, `ui-cache/`, `agents.yaml`, `agents.json`, `replay-projects.json`, `bin/raindrop`, `bin/raindrop.prev`) all stay as-is. Also resolves F-025 Q2 = KEEP.
+- **Renaming daemon-side `RAINDROP_*` env vars** — covered by **F-043** in this same PLAN, not here.
+- **Renaming LICENSE dual-copyright** — Kolya 2026-10-19: **remove** the "Raindrop AI" attribution from `LICENSE` and `AGENTS.md`. The fork credit lives in `README.md` instead, as an explicit "this is a fork of raindrop-ai/workshop" notice with links to the upstream repo, npm packages, and site. `package.json` `description` gets the same fork wording.
 - **Renaming `HANDOFF-*.md` files** — historical audit trail, leave intact per `agenttrace/AGENTS.md` hard rule about historical docs.
+- **Renaming the bundled binary filenames** (`binaries/raindrop-linux-x64`) — F-025 keeps `PLATFORM_MAP` keys unchanged; renaming would invalidate already-shipped tarballs.
 
 **Out-of-band follow-ups:**
 
 - **F-031 (skills/ docs)** — separate, docs scope.
-- **F-038 — Hardcoded `raindrop` strings in agenttrace daemon** — TBD.
+- **F-042** — mirror of this feature in the plugin repo (`agenttrace-opencode-plugin/ai-docs/PLAN.md`).
+- **F-043** — daemon runtime env vars + hardcoded `raindrop` strings in the daemon source.
 
 **Reference Kolya exchange 2026-09-23:**
 
@@ -467,18 +648,21 @@ If Kolya wants back-compat (read both, prefer new, log migration warning), this 
 
 **Todos:**
 
-- [ ] Kolya confirms: no back-compat (delete old names) OR back-compat (read both, warn) — affects effort
-- [ ] Kolya confirms: `endsWith("agenttrace")` OR drop the check entirely
-- [ ] Kolya confirms: keep "Raindrop AI" in LICENSE + AGENTS.md, or replace with AGENTTRACE attribution
-- [ ] Plugin: rename 10 `RAINDROP_*` env vars to `AGENTTRACE_*` (in both bundles)
+- [x] Kolya confirms: no back-compat (delete old names) — **ANSWERED 2026-10-19: «жёстко, "пользователи сами переименуют"»**
+- [x] Kolya confirms: `endsWith("raindrop")` check — **ANSWERED 2026-10-19: «выкинь проверку»**
+- [x] Kolya confirms: "Raindrop AI" attribution — **ANSWERED 2026-10-19: remove from LICENSE + AGENTS.md, fork notice + upstream links in README**
+- [x] Kolya confirms: daemon on-disk paths (`~/.raindrop/*`) stay — **ANSWERED 2026-10-19**
+- [x] Kolya confirms: add the mirror feature to the plugin repo → **F-042** created
+- [ ] Plugin: rename 12 `RAINDROP_*` env vars to `AGENTTRACE_*` (in both bundles)
 - [ ] Plugin: rename 5 `raindrop.json` paths to `agenttrace.json`
 - [ ] Plugin: add `AGENTTRACE_EVENT_NAME` env var (NEW from F-035 v2)
-- [ ] Plugin: resolve `process.execPath.endsWith(...)` decision
-- [ ] Plugin: 3-site lockstep (dist/{js,cjs} + static copy)
-- [ ] Plugin: bump version `0.1.1 → 0.2.0`
-- [ ] Plugin: update README.md, package.json description, AGENTS.md
+- [x] Plugin: resolve `process.execPath.endsWith(...)` decision — **RESOLVED: drop the check**
+- [ ] Plugin: 3-site lockstep (dist/{js,cjs} + static copy) — regenerate CJS via `node scripts/gen-cjs.mjs` (F-040), do not hand-edit
+- [ ] Plugin: bump version `0.0.2 → 0.1.0`
+- [ ] Plugin: update README.md (fork notice + upstream links), package.json description, AGENTS.md; strip "Raindrop AI" from LICENSE
+- [ ] Release notes for `0.1.0` list the breaking renames
 - [ ] Live smoke: `AGENTTRACE_EVENT_NAME=qwen_code_session` test
-- [ ] Update F-037 to Closed; move to `## Closed Features`
+- [ ] Update F-037 and F-042 to Closed; move to `## Closed Features`
 
 ---
 
@@ -910,21 +1094,31 @@ For each component, replace hardcoded English strings with `t("namespace.key")` 
 - **Q3 (bin alias).** `DROP` the `raindrop` alias from `package.json:bin` immediately. `0.0.1` users who scripted `raindrop ...` break — accepted cost for consistency. They update their scripts when they `npm update`.
 - **Q5 (version).** Bump to `0.0.3` (patch) instead of `0.1.0` (minor). CLI rename is technically breaking, but Kolya wants to stay on `0.0.x` for now; F-025 ships as patch since `0.0.2` is current and only a handful of `0.0.1` alpha users exist (not yet publicly announced to colleagues for production use).
 
-**Three remaining open design decisions** (Kolya must resolve before Stage 1 implementation begins):
+**Audit 2026-10-19 (Kolya decisions, verbatim):**
 
-1. **`RAINDROP_*` env-vars** — keep as-is, rename to `AGENTTRACE_*`, or dual-support both?
-   - Keep (`RAINDROP_PROJECT_ID`, `RAINDROP_LOCAL_WORKSHOP_URL`, `RAINDROP_WRITE_KEY`, `RAINDROP_WORKSHOP_DB_PATH`, `RAINDROP_WORKSHOP_UI_PORT`): no breaking change, but inconsistent.
-   - Rename (`AGENTTRACE_*`): consistent, but breaking for shell exports, scripts, CI configs.
-   - Dual-support: read `AGENTTRACE_*` first, fall back to `RAINDROP_*` with deprecation log. Best UX, ~20 lines of code.
-   - **Recommendation:** dual-support for one minor version cycle, then drop `RAINDROP_*`.
+> «1. Файлы настроек» демона не переименовать везде
+> 2. да нужно переменовать
+> 3. жёстко, «пользователи сами переименуют»
+> 4. Добавь фичу в репу
 
-2. **DB path `~/.raindrop/raindrop_workshop.db`** — keep, rename, or dual?
-   - Keep: existing data untouched, but inconsistent path on disk.
-   - Rename to `~/.agenttrace/agenttrace.db`: requires data-migration step on first launch.
-   - Dual: probe both paths at startup, prefer the new one, symlink the old for reads.
-   - **Recommendation:** rename + auto-migrate on first launch (read old DB → write new → symlink old for back-compat). One-shot.
+Superseding effect on this feature:
 
-3. (resolved) **`raindrop` bin alias** — **DROP** per Kolya decision (Q3). No alias shipped in `0.0.3`.
+- **Q1 (env vars) — RESOLVED: rename to `AGENTTRACE_*`, hard cut, no dual-support.** Kolya: «жёстко, "пользователи сами переименуют"». This cancels the dual-support recommendation below and aligns F-025 with F-037's back-compat decision.
+- **Q2 (DB path) — RESOLVED: KEEP `~/.raindrop/raindrop_workshop.db` unchanged.** Kolya: «Файлы настроек» демона не переименовать **везде**. The auto-migrate recommendation below is **cancelled**; **Stage 3 drops out of scope entirely**.
+- **Q5 (version) — SUPERSEDED.** The CLI rename now rides the single breaking `0.1.0` carrying the whole naming migration (F-025 + F-036 + F-037/F-042 + F-043). The "stay on `0.0.x`" call was made when the CLI rename was the only breaking change; with 45+ env vars renaming in the same release, `0.0.3` would understate the break.
+- **Scope addition:** the daemon's own 45 `RAINDROP_*` runtime env vars are now an explicit separate feature — **F-043** in this PLAN. The five listed below were a sample, not the full inventory.
+
+**Remaining open design decisions:**
+
+1. ~~**`RAINDROP_*` env-vars**~~ — **RESOLVED 2026-10-19: rename, no dual.** See F-043 for the full daemon inventory.
+
+2. ~~**DB path**~~ — **RESOLVED 2026-10-19: keep as-is.** No migration, no symlink.
+
+3. (resolved 2026-09-17) **`raindrop` bin alias** — **DROP** per Kolya decision (Q3). No alias shipped.
+
+4. **Sub-command form — RESOLVED (Kolya 2026-10-19): accept both.** `bin/agenttrace.js` accepts **both** `agenttrace serve` and `agenttrace workshop serve`. Upstream style preserved — `0.0.x` users who typed `raindrop workshop serve` can drop the `raindrop` → `agenttrace` swap and keep the rest of the command line.
+
+**All four design decisions are now closed (2026-10-19). Nothing left open in F-025 except the implementation itself.**
 
 **Files to edit in this repo (`agenttrace/`):**
 
@@ -932,7 +1126,7 @@ For each component, replace hardcoded English strings with `t("namespace.key")` 
   - `bin: { "raindrop": "bin/raindrop.js" }` → `bin: { "agenttrace": "bin/agenttrace.js" }` (no alias — Q3)
   - `main: "bin/raindrop.js"` → `bin/agenttrace.js`
   - `description`: replace `raindrop` with `agenttrace`
-  - `scripts.build:bun:stage` — paths to `build/bun/raindrop-bun-*` and `binaries/raindrop-*` — **do NOT rename these** (they're the bundled Bun binary filenames, not the CLI command; renaming them would invalidate already-shipped tarballs). The build script stays the same; only the launcher filename and `bin:` entry change.
+  - `scripts.build:bun:stage` — paths to `build/bun/raindrop-bun-*` and `binaries/raindrop-*` — **do NOT rename these** (they're the bundled Bun binary filenames, not the CLI command; renaming them would invalidate already-shipped tarballs; also confirmed by Kolya 2026-10-19 that on-disk names stay). The build script stays the same; only the launcher filename and `bin:` entry change.
   - `scripts.link-dev`: `ln -sf ../bin/raindrop-dev node_modules/.bin/raindrop-dev` — keep (upstream bash script)
 
 - `bin/raindrop.js` → `mv` to `bin/agenttrace.js`
@@ -953,6 +1147,8 @@ For each component, replace hardcoded English strings with `t("namespace.key")` 
 
 **Out of scope (do NOT touch):**
 
+- **`~/.raindrop/` on-disk paths — NOT renamed (Kolya 2026-10-19: «Файлы настроек» демона не переименовать везде).** The directory, `raindrop_workshop.db`, `.pid`, `.port`, `.log`, `.startup.log`, `install-registry.json`, `ui-cache/`, `agents.yaml`, `agents.json`, `replay-projects.json`, `bin/raindrop`, `bin/raindrop.prev` all stay. Only **environment variables** and the **CLI command name** change.
+- `binaries/raindrop-linux-x64` and friends — bundled binary filenames stay (renaming would invalidate shipped tarballs).
 - `bin/raindrop-dev` — upstream-owned
 - `@raindrop-ai/*` runtime dependencies — those are SDK modules, name is from npm namespace
 - F-022 closed description (historical record of what shipped under `raindrop` at 0.0.1)
@@ -961,43 +1157,42 @@ For each component, replace hardcoded English strings with `t("namespace.key")` 
 
 **Cross-repo impact:**
 
-- `agenttrace-opencode-plugin/` — plugin doesn't use the `raindrop` CLI; plugin sends HTTP to `localhost:5899`. No change needed. But `RAINDROP_*` env-vars it reads (e.g. `RAINDROP_PROJECT_ID`, `RAINDROP_SIDEPANEL_ACTIVE`, `RAINDROP_LOCAL_WORKSHOP_URL`) are Q1's reach. If we rename `RAINDROP_*` → `AGENTTRACE_*`, plugin must follow.
+- `agenttrace-opencode-plugin/` — plugin doesn't use the `raindrop` CLI; plugin sends HTTP to `localhost:5899`. But `RAINDROP_*` env-vars it reads (`RAINDROP_PROJECT_ID`, `RAINDROP_SIDEPANEL_ACTIVE`, `RAINDROP_SIDEPANEL_RUN_ID`, `RAINDROP_LOCAL_WORKSHOP_URL`) are Q1's reach. Since Q1 is now resolved to a hard rename, the plugin **must** follow in the same release — tracked as **F-042** in `agenttrace-opencode-plugin/ai-docs/PLAN.md` (mirror of F-037).
 - `agenttrace-qwen-bridge/` — already named `agenttrace-qwen-bridge` (F-024); bridge CLI command is already `agenttrace-qwen-bridge`. **No change needed.** But env-vars (`WORKSHOP_URL`, `BRIDGE_PORT`, `BRIDGE_LOG_LEVEL`, `BRIDGE_RATE_LIMIT_PER_MIN`) are agenttrace-specific, no `RAINDROP_*` reach.
 
 **Implementation stages:**
 
 - **Stage 1 (CLI rename only, no env-var change, no DB migration).** `bin/agenttrace.js` + `package.json:bin` + `main` + README/AGENTS examples. Effort: 1-2 hours.
-- **Stage 2 (env-var rename OR dual-support, per Q1).** Effort: 2-3 hours.
-- **Stage 3 (DB path rename + migration, per Q2).** Effort: 2-3 hours.
-- **Stage 4 (docs + release notes).** Update README/AGENTS, tag as `0.0.3` (patch per Q5). Effort: 1 hour.
-- **Stage 5 (live smoke on Kolya's machine).** Verify `npm install -g @grudanov-nikolay/agenttrace@0.0.3 && agenttrace serve` works end-to-end. Effort: 30 min.
+- **Stage 2 (env-var rename, per Q1 — resolved 2026-10-19: rename, no dual).** Effort: 2-3 hours. The daemon's full inventory of 45 `RAINDROP_*` vars is scoped as **F-043** and must land in the same release.
+- **Stage 3 — DROPPED (Kolya 2026-10-19).** Q2 resolved to KEEP: no DB path rename, no migration. Effort: 0.
+- **Stage 4 (docs + release notes).** Update README/AGENTS, tag as `0.1.0` (breaking — supersedes Q5's `0.0.3`, see audit above). Effort: 1 hour.
+- **Stage 5 (live smoke on Kolya's machine).** Verify `npm install -g @grudanov-nikolay/agenttrace@0.1.0 && agenttrace serve` works end-to-end. Effort: 30 min.
 
-**Total estimate:** ~7-10 hours wall-clock, broken into 5 buildable stages. Single release (`0.0.3`) ships Stages 1+4; Stages 2, 3, 5 can land together if Kolya wants, or stay split.
+**Total estimate:** ~5-7 hours wall-clock, broken into 4 buildable stages (was 7-10 h / 5 stages). Single breaking release (`0.1.0`) ships everything, together with F-036, F-037/F-042 and F-043.
 
-**Open questions for Kolya (must resolve before Stage 1 implementation begins):**
+**Open questions for Kolya:** none — all four design decisions (Q1–Q5) are closed as of 2026-10-19.
 
-1. Q1: keep / rename / dual-support `RAINDROP_*` env-vars?
-2. Q2: keep / rename / dual DB path?
-3. Q4: should `bin/agenttrace.js` accept `agenttrace serve` AND `agenttrace workshop serve` (upstream-style with `workshop` subcommand), or just `agenttrace serve` directly? (Both cost the same; first is more flexible.)
+**Resolved:**
 
-**Resolved (2026-09-17):**
-
-- Q3 (bin alias): DROP — no `raindrop` alias in `bin`, breaking change accepted.
-- Q5 (version): `0.0.3` (patch), not `0.1.0`.
+- 2026-09-17 — Q3 (bin alias): DROP — no `raindrop` alias in `bin`, breaking change accepted.
+- 2026-09-17 — Q5 (version): `0.0.3` (patch), not `0.1.0`. **SUPERSEDED 2026-10-19** by the unified breaking `0.1.0`.
+- 2026-10-19 — Q1 (env vars): rename to `AGENTTRACE_*`, hard cut, no dual-support. Tracked as F-043.
+- 2026-10-19 — Q2 (DB path): KEEP `~/.raindrop/`. Stage 3 dropped.
+- 2026-10-19 — Q4 (sub-command form): accept **both** `agenttrace serve` and `agenttrace workshop serve`. Upstream style preserved.
 
 **Todos:**
-- [ ] Q1, Q2, Q4 answered by Kolya
+- [x] Q1, Q2, Q4 answered by Kolya (2026-10-19) — nothing left open
 - [ ] Stage 1: `bin/agenttrace.js` (mv from `bin/raindrop.js`, content edits)
 - [ ] Stage 1: `package.json:bin` + `main` (no alias per Q3)
 - [ ] Stage 1: README + AGENTS examples
 - [ ] Stage 1: rebuild binaries (NOT needed — bin names are baked into launcher via PLATFORM_MAP keys, not renamed)
-- [ ] Stage 1: tag + release `0.0.3`
-- [ ] Stage 2: env-var dual-support OR rename (per Q1)
-- [ ] Stage 3: DB path migration (per Q2)
+- [x] ~~Stage 3: DB path migration~~ — cancelled, Q2 = KEEP
+- [ ] Stage 2: env-var rename (per Q1) — coordinated with **F-043**, same `0.1.0`
 - [ ] Stage 4: docs + release notes
+- [ ] Stage 4: tag + release `0.1.0` (with F-036 / F-037+F-042 / F-043)
 - [ ] Stage 5: live smoke test
 
-Refs F-024 (chained from — supersedes the "no breaking CLI change" decision documented there).
+Refs F-024 (chained from — supersedes the "no breaking CLI change" decision documented there), F-037 (the env-rename spec, mirrored as F-042 in the plugin repo), F-043 (the daemon's own 45 `RAINDROP_*` runtime env vars — Stage 2 scope).
 
 ---
 
