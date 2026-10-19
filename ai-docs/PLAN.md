@@ -39,6 +39,55 @@ Upstream `raindrop-ai/workshop`: stable since 2026-08-22; sync closed 2026-09-23
 
 ## Active Features
 
+### F-041 — Migrate `agenttrace/.opencode/plugins/graphify.js` to the OpenCode v2 plugin API — OPEN (not started)
+
+**Context:** Kolya upgraded to **OpenCode v2.0.32** on 2026-10-19. The v2 loader validates the module default-export with a non-strict zod schema — `{ id, effect }` or `{ id, setup }` — and **every** v1 legacy hook is gone from the binary (`tool.execute.before`, `chat.message`, `experimental.chat.system.transform`: 0 occurrences). `agenttrace/.opencode/plugins/graphify.js` is still v1-shaped, so it logs on every start:
+
+```
+message="failed to load plugin" target=/home/gna/workspase/projects/agenttrace/.opencode/plugins/graphify.js
+  cause=PluginModule.LoadError: Plugin must export a default definition with an id and an effect or setup function.
+message="failed to load plugin" target=.opencode/plugins/graphify.js
+  cause=ENOENT ... /home/gna/.opencode/plugins/graphify.js/package.json
+```
+
+The second entry is a bogus auto-discovered path (relative `.opencode/plugins/…` resolved against the *global* config dir) — same class of noise, also needs a config-level fix.
+
+The plugin itself is 28 lines (tracked, last touched in commit `ebbcae0` "spec + omo config"):
+
+```js
+import { existsSync } from "fs"; import { join } from "path";
+export const GraphifyPlugin = async ({ directory }) => {
+  let reminded = false;
+  return { "tool.execute.before": async (input, output) => {
+    if (reminded) return;
+    if (!existsSync(join(directory, "graphify-out", "graph.json"))) return;
+    if (input.tool === "bash") { output.args.command = 'echo "[graphify] …" && ' + output.args.command; reminded = true; }
+  }};
+};
+```
+
+Note it exports a **named** export, not `default` — v2 ignores named exports entirely.
+
+**Scope:** same migration pattern as the plugin-repo's F-040 (see `agenttrace-opencode-plugin/ai-docs/PLAN.md` F-040 for the full v1→v2 mapping table and the dumped v2 contract).
+
+**Plan:**
+1. New export shape — dual-version for consistency with the trace plugin:
+   `export default { id: "graphify", setup: async (ctx) => {...}, server: GraphifyPlugin }`
+   (`server` is stripped by v2's non-strict schema, used by v1 ≥1.18.29.)
+2. `directory` comes from `ctx.location.directory` (v2 `Context` has no `client`/`directory`/`worktree`).
+3. `tool.execute.before(input, output)` → `ctx.tool.hook("execute.before", e => { e.input.command = … })`; note `e.input` is mutable but `e.tool`/`e.sessionID` are readonly, and v2 delivers **one** argument (v1's `(input, output)` two-arg form is gone).
+4. Keep the `reminded` latch per-process; keep the reminder string free of backticks and `$(...)` (the header comment's warning still holds — the `echo "…"` prefix is still bash).
+5. Delete or fix the bogus `.opencode/plugins/graphify.js` reference that resolves to the global config dir.
+6. Verify: `opencode plugin list` shows `graphify`; `~/.local/share/opencode/log/opencode.log` has no `failed to load plugin` for either path; the reminder actually prepends to a `bash` call when `graphify-out/graph.json` exists.
+
+**Out of scope:** no daemon runtime code changes; no version bump / publish (this file is a repo-local dev plugin, never published to npm); no interaction with the trace plugin.
+
+**Todos:**
+- [ ] Migrate `graphify.js` to `{ id, setup, server }` + `ctx.tool.hook`
+- [ ] Kill the bogus relative `.opencode/plugins/graphify.js` discovery entry
+- [ ] `opencode plugin list` + log verification
+- [ ] Commit (Kolya command — no auto-commit)
+
 ### F-039 — Process improvement layer: analyst-agent over executor-agent (system around the agent, not the agent itself)
 
 **Context:** Kolya scenario 2026-09-23 (verbatim): "скорее другой агент будет анализировать что делал первый агент чтоб понять в чем агент ошибся [...] попросили агента написать новый модуль на python для django приложения [...] сотрудники делают хьюман гейт чтоб проверять качество работы ии агента автономного [...] люди посмотрели и сказали что много ошибок и исправили. смотреть потом лагфус или азуруфенкс глазками и что-то искать тяжело, сравнивать коммит агента и потом что внес человек тоже не удобно. и тут появляется наша система, они делает глубокую сборку всего что агент делал [...] другой агент вместо человека посмотрит и скажет как улучшить харнес в широком смысле [...] как улучшить скилы, промты, количество агентов, тулы, количество тулов, правила, структуру репозитория, хуки, ci проверки и пре комит хуки и другое что строится вокруг агента".
