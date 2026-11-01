@@ -22,8 +22,8 @@ interface DripItem {
 const h = React.createElement;
 const GITHUB_REPO = "raindrop-ai/workshop";
 const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
-const DEFAULT_DRIP_ITEMS_URL = "https://www.raindrop.ai/api/drip-items";
-const DEFAULT_DRIP_CLAIM_URL = "https://www.raindrop.ai/api/drip-claims";
+const DEFAULT_DRIP_ITEMS_URL = "https://www.agenttrace.ai/api/drip-items";
+const DEFAULT_DRIP_CLAIM_URL = "https://www.agenttrace.ai/api/drip-claims";
 const CARD_WIDTH = 46;
 const CARD_HEIGHT = 24;
 const STICKER_BOX_HEIGHT = CARD_HEIGHT;
@@ -114,7 +114,7 @@ const CAP_MATRIX = [
 const ITEMS: DripItem[] = [
   {
     id: "hat",
-    label: "raindrop field cap",
+    label: "agenttrace field cap",
     remaining: 200,
     matrix: CAP_MATRIX,
     displayWidth: 30,
@@ -123,7 +123,7 @@ const ITEMS: DripItem[] = [
   },
   {
     id: "umbrella",
-    label: "raindrop umbrella",
+    label: "agenttrace umbrella",
     remaining: 50,
     matrix: UMBRELLA_MATRIX,
     displayWidth: 25,
@@ -137,10 +137,10 @@ const ITEMS: DripItem[] = [
 ];
 
 function printHelp(): void {
-  console.log(`raindrop drip - choose Raindrop merch
+  console.log(`agenttrace drip - choose Raindrop merch
 
 USAGE
-    raindrop drip
+    agenttrace drip
 
 WHAT IT DOES
     Opens an Ink-powered terminal picker with live availability:
@@ -309,7 +309,7 @@ async function loadDripItems(): Promise<DripItem[]> {
     const response = await fetch(url, {
       headers: {
         accept: "application/json",
-        "user-agent": `raindrop-cli/${VERSION}`,
+        "user-agent": `agenttrace-cli/${VERSION}`,
       },
     });
     if (!response.ok) return ITEMS;
@@ -334,7 +334,7 @@ async function submitDripClaim(input: {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "user-agent": `raindrop-cli/${VERSION}`,
+        "user-agent": `agenttrace-cli/${VERSION}`,
       },
       body: JSON.stringify({
         email: input.email,
@@ -463,7 +463,7 @@ function StaticFallback({ items }: { items: DripItem[] }): React.ReactElement {
   return h(
     Box,
     { flexDirection: "column", gap: 1 },
-    h(Text, { color: "cyanBright", bold: true }, "raindrop drip"),
+    h(Text, { color: "cyanBright", bold: true }, "agenttrace drip"),
     h(Box, { gap: 2 }, ...items.filter((item) => item.matrix).map((item) => h(ItemCard, {
       key: item.id,
       item,
@@ -568,7 +568,7 @@ function DripApp({
     h(
       Box,
       { flexDirection: "column" },
-      h(Text, { color: "cyanBright", bold: true }, "raindrop drip"),
+      h(Text, { color: "cyanBright", bold: true }, "agenttrace drip"),
       h(Text, { color: "gray" }, "choose your drop"),
     ),
     h(
@@ -1022,7 +1022,7 @@ async function chooseDripItem(emailArg?: string): Promise<DripSelection | null> 
 }
 
 export function renderDripStore(): string {
-  return `raindrop drip
+  return `agenttrace drip
 
 field cap  live count
 umbrella   live count`;

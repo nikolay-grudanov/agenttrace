@@ -1,30 +1,30 @@
 #!/usr/bin/env node
 /**
- * raindrop CLI entry.
+ * agenttrace CLI entry.
  *
- * Top-level: `raindrop` is an umbrella for raindrop tooling. Today the only
+ * Top-level: `agenttrace` is an umbrella for agenttrace tooling. Today the only
  * product underneath is `workshop` (the local trace debugger). Future
- * products plug in as siblings: `raindrop foo …`.
+ * products plug in as siblings: `agenttrace foo …`.
  *
- *   raindrop                         help
- *   raindrop --version | -v          print version
- *   raindrop setup [flags]           wire raindrop into supported agents
+ *   agenttrace                         help
+ *   agenttrace --version | -v          print version
+ *   agenttrace setup [flags]           wire agenttrace into supported agents
  *                                     (drops MCP + skill files; see setup --help)
- *   raindrop sync                    refresh skills/MCP in every place we
+ *   agenttrace sync                    refresh skills/MCP in every place we
  *                                     wired them up (per ~/.raindrop/install-registry.json)
- *   raindrop update [flags]          umbrella update (currently == workshop update);
- *                                     auto-runs `raindrop sync` at the end
- *   raindrop uninstall [flags]       remove raindrop integrations + binary
- *   raindrop replay register         register current project replay config
- *   raindrop workshop                start daemon + open UI (idempotent)
- *   raindrop workshop setup          write AGENTTRACE_LOCAL_DEBUGGER to ./.env, then start+open
- *   raindrop workshop start          start daemon in background
- *   raindrop workshop stop           stop daemon
- *   raindrop workshop reset          delete local Workshop DB after confirmation
- *   raindrop workshop status         is it running?
- *   raindrop workshop serve          foreground daemon
- *   raindrop workshop update [args]  product-scoped update
- *   raindrop workshop mcp            MCP server over stdio (used by OpenCode and other MCP-aware agents)
+ *   agenttrace update [flags]          umbrella update (currently == workshop update);
+ *                                     auto-runs `agenttrace sync` at the end
+ *   agenttrace uninstall [flags]       remove agenttrace integrations + binary
+ *   agenttrace replay register         register current project replay config
+ *   agenttrace workshop                start daemon + open UI (idempotent)
+ *   agenttrace workshop setup          write AGENTTRACE_LOCAL_DEBUGGER to ./.env, then start+open
+ *   agenttrace workshop start          start daemon in background
+ *   agenttrace workshop stop           stop daemon
+ *   agenttrace workshop reset          delete local Workshop DB after confirmation
+ *   agenttrace workshop status         is it running?
+ *   agenttrace workshop serve          foreground daemon
+ *   agenttrace workshop update [args]  product-scoped update
+ *   agenttrace workshop mcp            MCP server over stdio (used by OpenCode and other MCP-aware agents)
  */
 import fs from "fs";
 import os from "os";
@@ -66,7 +66,7 @@ function getConfiguredBindHost(): string {
 function printWorkshopAccess(port: number, opts: { pid?: number | null; logs?: boolean } = {}): void {
   console.log("");
   console.log(`\x1b[36mRaindrop Workshop:\x1b[0m \x1b[4mhttp://localhost:${port}\x1b[0m`);
-  if (opts.pid) console.log("\x1b[2mStop: raindrop workshop stop\x1b[0m");
+  if (opts.pid) console.log("\x1b[2mStop: agenttrace workshop stop\x1b[0m");
   if (opts.logs) console.log("\x1b[2mLogs: " + LOG_PATH + "\x1b[0m");
   console.log("");
   console.log("env");
@@ -114,13 +114,13 @@ async function runMcp(): Promise<void> {
       process.env.AGENTTRACE_WORKSHOP_URL = `http://localhost:${result.port}`;
       if (!result.alreadyRunning) {
         console.error(
-          `[raindrop workshop mcp] auto-started daemon on :${result.port}` +
+          `[agenttrace workshop mcp] auto-started daemon on :${result.port}` +
             (result.pid ? ` (pid ${result.pid})` : "") +
             ` — logs at ${LOG_PATH}`
         );
       }
     } catch (err) {
-      console.error(`[raindrop workshop mcp] failed to ensure daemon: ${(err as Error).message}`);
+      console.error(`[agenttrace workshop mcp] failed to ensure daemon: ${(err as Error).message}`);
       process.exit(1);
     }
   }
@@ -171,7 +171,7 @@ async function ensureDaemonRunning(): Promise<EnsureDaemonResult> {
 
   const logFd = fs.openSync(LOG_PATH, "a");
   // Two daemonization paths, one binary:
-  //   - Compiled binary: process.execPath is the `raindrop` binary itself.
+  //   - Compiled binary: process.execPath is the `agenttrace` binary itself.
   //     We re-exec ourselves with `workshop serve`. We do NOT pass __filename
   //     — in a Bun-compiled binary, __filename resolves to the *build-time*
   //     source path (e.g. /Users/runner/work/.../src/index.ts), which is
@@ -183,7 +183,7 @@ async function ensureDaemonRunning(): Promise<EnsureDaemonResult> {
   const isCompiled = path
     .basename(process.execPath)
     .toLowerCase()
-    .startsWith("raindrop");
+    .startsWith("agenttrace");
   const childArgs = isCompiled
     ? ["workshop", "serve"]
     : [__filename, "workshop", "serve"];
@@ -268,10 +268,10 @@ async function cmdStop(portHint?: number): Promise<number> {
 async function cmdReset(args: string[]): Promise<number> {
   for (const arg of args) {
     if (arg === "--help" || arg === "-h") {
-      console.log(`raindrop workshop reset — reset the local Workshop DB
+      console.log(`agenttrace workshop reset — reset the local Workshop DB
 
 USAGE
-    raindrop workshop reset
+    agenttrace workshop reset
 
 This deletes local Workshop traces and saved data after confirmation.
 `);
@@ -353,16 +353,16 @@ async function cmdStatus(): Promise<number> {
   if (pid && processAlive(pid)) {
     const unhealthyPort = readPort() ?? requestedPort;
     console.log(`pid ${pid} alive but /health on :${unhealthyPort} not responding`);
-    console.log("hint: raindrop workshop stop && raindrop workshop start");
+    console.log("hint: agenttrace workshop stop && agenttrace workshop start");
     return 2;
   }
   console.log("not running");
-  console.log("hint: start it with `raindrop workshop`, then open http://localhost:" + port);
+  console.log("hint: start it with `agenttrace workshop`, then open http://localhost:" + port);
   return 1;
 }
 
 /**
- * Default action when the user runs `raindrop workshop` with no further
+ * Default action when the user runs `agenttrace workshop` with no further
  * subcommand: ensure the daemon is up, then open the UI in the browser.
  * Idempotent — re-running is harmless.
  */
@@ -390,7 +390,7 @@ async function cmdWorkshopDefault(): Promise<number> {
 }
 
 /**
- * `raindrop workshop setup` — bootstrap the current project to ship traces to
+ * `agenttrace workshop setup` — bootstrap the current project to ship traces to
  * the local debugger. Three jobs, in order:
  *
  *   1. Write `AGENTTRACE_LOCAL_DEBUGGER=http://localhost:<port>/v1/` into
@@ -400,7 +400,7 @@ async function cmdWorkshopDefault(): Promise<number> {
  *   3. Open the UI in the browser.
  *
  * The single command a new user runs after install. Designed to be the
- * shortest distance between "I just installed raindrop" and "my traces
+ * shortest distance between "I just installed agenttrace" and "my traces
  * appear in a browser".
  */
 async function cmdWorkshopSetup(args: string[]): Promise<number> {
@@ -414,10 +414,10 @@ async function cmdWorkshopSetup(args: string[]): Promise<number> {
     else if (a === "--file") envFile = args[++i] ?? null;
     else if (a.startsWith("--file=")) envFile = a.slice("--file=".length);
     else if (a === "--help" || a === "-h") {
-      console.log(`raindrop workshop setup — bootstrap project for local trace debugging
+      console.log(`agenttrace workshop setup — bootstrap project for local trace debugging
 
 USAGE
-    raindrop workshop setup [--file=PATH] [--force] [--print]
+    agenttrace workshop setup [--file=PATH] [--force] [--print]
 
 WHAT IT DOES
     1. Writes AGENTTRACE_LOCAL_DEBUGGER=http://localhost:<port>/v1/ into ./.env
@@ -637,29 +637,29 @@ function sleep(ms: number): Promise<void> {
 }
 
 function printRootHelp(): void {
-  console.log(`raindrop ${VERSION} — local-first trace debugger for AI agents
+  console.log(`agenttrace ${VERSION} — local-first trace debugger for AI agents
 
   Quick start:
 
       cd path/to/your-app
-      raindrop workshop setup     Write .env, start the daemon, open the UI.
+      agenttrace workshop setup     Write .env, start the daemon, open the UI.
 
   Agent integrations:
 
-      raindrop setup              Wire raindrop into supported agents
+      agenttrace setup              Wire agenttrace into supported agents
                                   (drops MCP + skill files in their config dirs).
-      raindrop replay register    Register this project's replay config.
+      agenttrace replay register    Register this project's replay config.
 
   Day-to-day:
 
-      raindrop workshop           Start daemon + open UI (idempotent).
-      raindrop workshop status    Is it running?
-      raindrop workshop stop      Stop the daemon.
-      raindrop workshop reset     Delete the local DB after confirmation.
-      raindrop update             Update raindrop tooling.
-      raindrop uninstall          Remove raindrop from this machine.
+      agenttrace workshop           Start daemon + open UI (idempotent).
+      agenttrace workshop status    Is it running?
+      agenttrace workshop stop      Stop the daemon.
+      agenttrace workshop reset     Delete the local DB after confirmation.
+      agenttrace update             Update agenttrace tooling.
+      agenttrace uninstall          Remove agenttrace from this machine.
 
-  More:  raindrop workshop setup --help · raindrop setup --help · raindrop uninstall --help
+  More:  agenttrace workshop setup --help · agenttrace setup --help · agenttrace uninstall --help
          github.com/raindrop-ai/workshop`);
 }
 
@@ -672,10 +672,10 @@ async function dispatchReplay(verb: string | undefined, rest: string[]): Promise
         if (arg === "--cwd") cwd = path.resolve(rest[++i] ?? process.cwd());
         else if (arg.startsWith("--cwd=")) cwd = path.resolve(arg.slice("--cwd=".length));
         else if (arg === "-h" || arg === "--help") {
-          console.log(`raindrop replay register — register project replay config
+          console.log(`agenttrace replay register — register project replay config
 
 USAGE
-    raindrop replay register [--cwd=DIR]
+    agenttrace replay register [--cwd=DIR]
 `);
           return 0;
         } else {
@@ -700,10 +700,10 @@ USAGE
     case "-h":
     case "--help":
     case "help":
-      console.log(`raindrop replay — local agent replay helpers
+      console.log(`agenttrace replay — local agent replay helpers
 
 USAGE
-    raindrop replay register [--cwd=DIR]
+    agenttrace replay register [--cwd=DIR]
 `);
       return 0;
     default:
@@ -714,11 +714,11 @@ USAGE
 
 function printWorkshopHelp(): void {
   const port = process.env[PORT_ENV] ?? "5899";
-  console.log(`raindrop workshop ${VERSION} — local trace debugger
+  console.log(`agenttrace workshop ${VERSION} — local trace debugger
 
 USAGE
-    raindrop workshop                 Start daemon + open UI (idempotent).
-    raindrop workshop setup [flags]   Write .env + start + open. The standard
+    agenttrace workshop                 Start daemon + open UI (idempotent).
+    agenttrace workshop setup [flags]   Write .env + start + open. The standard
                                        first command after install.
 
 DAEMON
@@ -788,7 +788,7 @@ async function dispatchWorkshop(verb: string | undefined, rest: string[]): Promi
       return 0;
     default:
       console.error(`unknown subcommand: workshop ${verb}`);
-      console.error("run `raindrop workshop --help` for usage.");
+      console.error("run `agenttrace workshop --help` for usage.");
       return 64;
   }
 }
@@ -810,15 +810,15 @@ async function dispatchWorkshop(verb: string | undefined, rest: string[]): Promi
       process.exit(0);
       break;
     case "setup":
-      // Umbrella setup: file-drop installer for raindrop into Cursor /
-      // OpenCode and other MCP-aware agents. Distinct from `raindrop workshop setup`, which is
+      // Umbrella setup: file-drop installer for agenttrace into Cursor /
+      // OpenCode and other MCP-aware agents. Distinct from `agenttrace workshop setup`, which is
       // the per-project (.env + daemon + open UI) bootstrap.
       process.exit(await cmdSetup(process.argv.slice(3)));
       break;
     case "sync":
       // Refresh skill files + MCP entries in every place we previously
       // installed (per ~/.raindrop/install-registry.json). Auto-runs at
-      // the tail of `raindrop update`; exposed as a public command for
+      // the tail of `agenttrace update`; exposed as a public command for
       // manual refresh between releases.
       process.exit(await cmdSync(process.argv.slice(3)));
       break;
@@ -831,7 +831,7 @@ async function dispatchWorkshop(verb: string | undefined, rest: string[]): Promi
       process.exit(await dispatchReplay(process.argv[3], process.argv.slice(4)));
       break;
     case "update":
-      // Umbrella update: today, raindrop ships only the workshop product, so
+      // Umbrella update: today, agenttrace ships only the workshop product, so
       // this is a thin proxy. When other products land, this expands to
       // iterate-and-update each one.
       process.exit(await runUpdate(process.argv.slice(3)));
@@ -842,9 +842,15 @@ async function dispatchWorkshop(verb: string | undefined, rest: string[]): Promi
     case "workshop":
       process.exit(await dispatchWorkshop(process.argv[3], process.argv.slice(4)));
       break;
+    case "serve":
+      // F-025 (Kolya 2026-10-19, Q4): accept both `agenttrace serve` and
+      // `agenttrace workshop serve`. Top-level `serve` is an alias for the
+      // workshop daemon in the foreground.
+      process.exit(await dispatchWorkshop("serve", process.argv.slice(3)));
+      break;
     default:
       console.error(`unknown subcommand: ${top}`);
-      console.error("run `raindrop --help` for usage.");
+      console.error("run `agenttrace --help` for usage.");
       process.exit(64);
   }
 })().catch((err) => {

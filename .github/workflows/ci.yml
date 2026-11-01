@@ -42,11 +42,11 @@ jobs:
 
       - name: Verify npm launcher resolves a binary
         run: |
-          # Smoke-check that bin/raindrop.js detects the platform and finds a
+          # Smoke-check that bin/agenttrace.js detects the platform and finds a
           # binary for it (linux-x64 on this runner). Skip --version since
           # the binary's bundled version doesn't change with package.json.
-          node bin/raindrop.js workshop --help > /dev/null
-          echo "bin/raindrop.js launches OK"
+          node bin/agenttrace.js workshop --help > /dev/null
+          echo "bin/agenttrace.js launches OK"
 
   # Build the two bundled Bun binaries on every push. Catches a broken
   # cross-compile before we cut a release.

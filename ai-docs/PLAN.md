@@ -1129,7 +1129,7 @@ For each component, replace hardcoded English strings with `t("namespace.key")` 
 
 ---
 
-### F-025 — Rename CLI command `raindrop` → `agenttrace` (and CLI surface cleanup)
+### F-025 — Rename CLI command `raindrop` → `agenttrace` (and CLI surface cleanup) — implemented 2026-11-01
 
 **Context:** F-024 renamed the stack at the package level (`@grudanov-nikolay/opencode-workshop` → `@grudanov-nikolay/agenttrace`, etc.) but left the **shell CLI command** as `raindrop` for backwards-compat with the `0.0.1` alpha. After F-024 Kolya decided this is confusing — users now install `agenttrace` but type `raindrop workshop serve`. F-025 promotes the CLI to `agenttrace` with the same subcommand shape (`serve`, `setup`, `status`, `reset`, `version`, etc.).
 
@@ -1224,17 +1224,29 @@ Superseding effect on this feature:
 - 2026-10-19 — Q2 (DB path): KEEP `~/.raindrop/`. Stage 3 dropped.
 - 2026-10-19 — Q4 (sub-command form): accept **both** `agenttrace serve` and `agenttrace workshop serve`. Upstream style preserved.
 
+**Implementation notes (2026-11-01):**
+
+1. **Q4 (`agenttrace serve` as well as `agenttrace workshop serve`) needed a new top-level case.** The dispatch table only had `workshop`, whose `serve` verb was reachable as `agenttrace workshop serve`. Added a top-level `case "serve":` forwarding to `dispatchWorkshop("serve", …)`.
+
+2. **A blind `raindrop` → `agenttrace` token replacement broke three on-disk paths.** Kolya's decision 2 was «Файлы настроек» демона не переименовать **везде** — `~/.raindrop/` stays. The replacement initially rewrote `~/.raindrop` to `~/.agenttrace` in `src/index.ts` (`STATE_DIR`), `src/update.ts` (update workdir) and `src/install/apply.ts` (`defaultBinPath`), which would have silently split the daemon's state across two directories. All three were restored to `~/.raindrop`; a repo-wide scan for `.agenttrace` on-disk paths now returns zero.
+
+3. **The bundled binary filenames deliberately stay `raindrop-*`.** `PLATFORM_MAP` keys, `build/bun/raindrop-bun-*` and `binaries/raindrop-*` are compiled-artifact names, not the CLI command. The compiled-binary detection (`process.execPath` starts with `raindrop`) now also accepts `agenttrace`, since the launcher may be renamed on disk.
+
+4. **CI's smoke step pointed at the old launcher path** (`node bin/raindrop.js workshop --help`) and would have broken on the rename. Updated to `bin/agenttrace.js`.
+
+5. **Stale `RAINDROP_VERSION` in `AGENTS.md`** would have baked the wrong version into a release build — `scripts/build-bun.ts` reads `AGENTTRACE_VERSION` (renamed in F-043) and defines `__AGENTTRACE_VERSION__`. Fixed the doc to match the code.
+
 **Todos:**
 - [x] Q1, Q2, Q4 answered by Kolya (2026-10-19) — nothing left open
-- [ ] Stage 1: `bin/agenttrace.js` (mv from `bin/raindrop.js`, content edits)
-- [ ] Stage 1: `package.json:bin` + `main` (no alias per Q3)
-- [ ] Stage 1: README + AGENTS examples
-- [ ] Stage 1: rebuild binaries (NOT needed — bin names are baked into launcher via PLATFORM_MAP keys, not renamed)
+- [x] Stage 1: `bin/agenttrace.js` (git mv from `bin/raindrop.js`, content edits)
+- [x] Stage 1: `package.json:bin` + `main` (no alias per Q3)
+- [x] Stage 1: README + AGENTS examples
+- [x] Stage 1: rebuild binaries — NOT needed (bin names are baked into the launcher via PLATFORM_MAP keys, not renamed). Verified: `npm pack --dry-run` ships `bin/agenttrace.js` + both `binaries/raindrop-*` unchanged.
 - [x] ~~Stage 3: DB path migration~~ — cancelled, Q2 = KEEP
-- [ ] Stage 2: env-var rename (per Q1) — coordinated with **F-043**, same `0.1.0`
+- [x] Stage 2: env-var rename (per Q1) — done in **F-043** (`eda078a`), same `0.1.0`
 - [ ] Stage 4: docs + release notes
 - [ ] Stage 4: tag + release `0.1.0` (with F-036 / F-037+F-042 / F-043)
-- [ ] Stage 5: live smoke test
+- [x] Stage 5: live smoke test — `agenttrace --help` / `--version` / `agenttrace workshop --help` / `agenttrace serve` all verified in source mode
 
 Refs F-024 (chained from — supersedes the "no breaking CLI change" decision documented there), F-037 (the env-rename spec, mirrored as F-042 in the plugin repo), F-043 (the daemon's own 45 `RAINDROP_*` runtime env vars — Stage 2 scope).
 

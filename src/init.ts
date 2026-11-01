@@ -76,12 +76,12 @@ function openTtyInput(): tty.ReadStream | null {
 }
 
 function printHelp(): void {
-  console.log(`raindrop setup ${VERSION} — set up Raindrop in AI coding agents
+  console.log(`agenttrace setup ${VERSION} — set up Raindrop in AI coding agents
 
 USAGE
-    raindrop setup
-    raindrop setup --global
-    raindrop setup --local
+    agenttrace setup
+    agenttrace setup --global
+    agenttrace setup --local
 
 WHAT IT INSTALLS
     Raindrop commands/skills and the Raindrop MCP server. These are installed
@@ -92,7 +92,7 @@ FLAGS
     --local           Install only for --cwd / current project
     --scope=<scope>   global | local
     --cwd=<dir>       Project directory for local installs (default: cwd)
-    --bin-path=<p>    Override raindrop binary path used by MCP entries
+    --bin-path=<p>    Override agenttrace binary path used by MCP entries
 `);
 }
 
@@ -181,7 +181,7 @@ export async function cmdSetup(argv: string[]): Promise<number> {
   } catch (err) {
     if (err instanceof UsageError) {
       console.error(err.message);
-      console.error("run `raindrop setup --help` for usage.");
+      console.error("run `agenttrace setup --help` for usage.");
       return 64;
     }
     throw err;

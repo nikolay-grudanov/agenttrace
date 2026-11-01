@@ -1,4 +1,4 @@
-// `raindrop update` / `raindrop workshop update` — in-place upgrade to the
+// `agenttrace update` / `agenttrace workshop update` — in-place upgrade to the
 // latest release on a channel (default `stable`). Same manifest schema,
 // sha256 verification, and atomic-rename + .prev rollback as install.sh.
 //
@@ -62,11 +62,11 @@ function parseUpdateArgs(rawArgs: string[]): UpdateArgs {
     else if (a === "-h" || a === "--help") {
       console.log(
         [
-          "raindrop update — upgrade to the latest release.",
+          "agenttrace update — upgrade to the latest release.",
           "",
           "USAGE",
-          "    raindrop update [--channel=stable|beta] [--check] [--force]",
-          "    raindrop workshop update [--channel=stable|beta] [--check] [--force]",
+          "    agenttrace update [--channel=stable|beta] [--check] [--force]",
+          "    agenttrace workshop update [--channel=stable|beta] [--check] [--force]",
           "",
           "OPTIONS",
           "    --channel=stable|beta   Channel to install (default: stable).",
@@ -90,7 +90,7 @@ function parseUpdateArgs(rawArgs: string[]): UpdateArgs {
       out.manifestUrl = a.slice("--manifest=".length);
     } else {
       console.error(`update: unknown arg: ${a}`);
-      console.error("run `raindrop update --help` for usage.");
+      console.error("run `agenttrace update --help` for usage.");
       process.exit(2);
     }
   }
@@ -144,14 +144,14 @@ export function compareVersions(a: string, b: string): -1 | 0 | 1 {
 
 /**
  * Resolve the on-disk path of the binary the user is running.
- * For a Bun-compiled binary, `process.execPath` is the raindrop binary itself.
+ * For a Bun-compiled binary, `process.execPath` is the agenttrace binary itself.
  * For `bun run src/index.ts`, `process.execPath` is the `bun` interpreter.
  */
 function resolveCurrentBinary(): { path: string; isCompiled: boolean } {
   const exe = process.execPath;
   const base = path.basename(exe).toLowerCase();
-  // Compiled Bun binaries embed the raindrop entrypoint and are typically
-  // named `raindrop` or `raindrop.exe`. The Bun interpreter is `bun`/`bun.exe`.
+  // Compiled Bun binaries embed the agenttrace entrypoint and are typically
+  // named `agenttrace` or `agenttrace.exe`. The Bun interpreter is `bun`/`bun.exe`.
   const isCompiled = base.startsWith("raindrop");
   return { path: exe, isCompiled };
 }
@@ -165,7 +165,7 @@ function detectManagedInstall(binaryPath: string): string | null {
 
 async function fetchManifest(url: string): Promise<Manifest> {
   const res = await fetch(url, {
-    headers: { "user-agent": `raindrop-cli/${VERSION}` },
+    headers: { "user-agent": `agenttrace-cli/${VERSION}` },
   });
   if (!res.ok) {
     throw new Error(`update: manifest fetch failed: HTTP ${res.status} ${url}`);
@@ -183,7 +183,7 @@ async function downloadAndVerify(
   expectedRawSize = expectedSize,
 ): Promise<void> {
   const res = await fetch(url, {
-    headers: { "user-agent": `raindrop-cli/${VERSION}` },
+    headers: { "user-agent": `agenttrace-cli/${VERSION}` },
   });
   if (!res.ok) {
     throw new Error(`update: download failed: HTTP ${res.status} ${url}`);
@@ -256,7 +256,7 @@ function resolveDownloadArtifact(platformEntry: PlatformEntry): {
  *
  * If we crash between the two renames, the user is left with a missing
  * binary at $DEST and the `.prev` still in place. Recovery is one move:
- *   mv ~/.raindrop/bin/raindrop.prev ~/.raindrop/bin/raindrop
+ *   mv ~/.raindrop/bin/agenttrace.prev ~/.raindrop/bin/agenttrace
  */
 function atomicReplace(currentPath: string, newPath: string): string | null {
   const prevPath = `${currentPath}.prev`;
@@ -352,7 +352,7 @@ export async function performUpdate(opts: {
 
   const workDir = opts.workDir ?? path.join(os.homedir(), ".raindrop", "updates", channelEntry.version);
   await Bun.write(path.join(workDir, ".touch"), "");
-  const downloadPath = path.join(workDir, "raindrop.new");
+  const downloadPath = path.join(workDir, "agenttrace.new");
   opts.onBeforeDownload?.();
   const artifact = resolveDownloadArtifact(platformEntry);
   await download(
@@ -389,8 +389,8 @@ export async function runUpdate(rawArgs: string[]): Promise<number> {
   }
   const managedBy = detectManagedInstall(binaryPath);
   if (managedBy === "homebrew") {
-    console.error(`update: raindrop appears to be managed by Homebrew (${binaryPath}).`);
-    console.error("update: use `brew upgrade raindrop` to upgrade.");
+    console.error(`update: agenttrace appears to be managed by Homebrew (${binaryPath}).`);
+    console.error("update: use `brew upgrade agenttrace` to upgrade.");
     return 64;
   }
 
@@ -458,7 +458,7 @@ async function restartDaemonIfRunning(binaryPath: string): Promise<number> {
 }
 
 /**
- * Spawn the just-installed binary to run `raindrop sync` so the
+ * Spawn the just-installed binary to run `agenttrace sync` so the
  * registry's recorded files get the new release's skill content.
  *
  * Why a spawn instead of an in-process call: by the time we get
@@ -468,9 +468,9 @@ async function restartDaemonIfRunning(binaryPath: string): Promise<number> {
  * the exact opposite of what we want. The newly-installed binary
  * has the new EMBEDDED_SKILLS map, so we exec that.
  *
- * Skipped when the registry is empty (user never ran `raindrop
+ * Skipped when the registry is empty (user never ran `agenttrace
  * setup`); we don't want to print sync output when there's nothing
- * to sync. The user can manually `raindrop setup` later, and from
+ * to sync. The user can manually `agenttrace setup` later, and from
  * that point on every `update` will auto-sync.
  *
  * Failure is non-fatal — surface the error and tell the user how
@@ -485,13 +485,13 @@ async function runPostUpdateSync(newBinaryPath: string): Promise<void> {
   } catch (err) {
     console.warn(
       `[update] could not read ${defaultInstallRegistryPath()} (${(err as Error).message}). ` +
-        `Skipping sync. Run \`raindrop sync\` manually after editing the registry.`,
+        `Skipping sync. Run \`agenttrace sync\` manually after editing the registry.`,
     );
     return;
   }
   if (registryEmpty) {
     // Nothing to sync — first-time-after-install, or user has never
-    // wired raindrop into an IDE.
+    // wired agenttrace into an IDE.
     return;
   }
 
@@ -500,13 +500,13 @@ async function runPostUpdateSync(newBinaryPath: string): Promise<void> {
   const res = spawnSync(newBinaryPath, ["sync"], { stdio: "inherit" });
   if (res.error) {
     console.warn(
-      `[update] sync exec failed: ${res.error.message}. Run \`raindrop sync\` manually.`,
+      `[update] sync exec failed: ${res.error.message}. Run \`agenttrace sync\` manually.`,
     );
     return;
   }
   if (typeof res.status === "number" && res.status !== 0) {
     console.warn(
-      `[update] sync exited with code ${res.status}. Run \`raindrop sync\` manually for details.`,
+      `[update] sync exited with code ${res.status}. Run \`agenttrace sync\` manually for details.`,
     );
   }
 }

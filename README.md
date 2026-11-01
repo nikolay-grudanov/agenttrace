@@ -28,12 +28,12 @@ Pick **one** of the two methods below — they install the same daemon.
 
 ```bash
 npm install -g @grudanov-nikolay/agenttrace
-raindrop workshop serve
+agenttrace workshop serve
 ```
 
 No build tools required at runtime: the npm tarball contains pre-compiled
 Bun binaries (`binaries/raindrop-linux-x64`, `binaries/raindrop-windows-x64.exe`),
-and a tiny Node launcher (`bin/raindrop.js`) selects the right one for your
+and a tiny Node launcher (`bin/agenttrace.js`) selects the right one for your
 platform.
 
 ### Option B — upstream curl installer
@@ -121,20 +121,20 @@ commits ahead of origin at any time.
 
 | Env var | Purpose | Default |
 | --- | --- | --- |
-| `RAINDROP_WORKSHOP_PORT` | HTTP + WS port | `5899` |
-| `RAINDROP_WORKSHOP_DB_PATH` | SQLite database file | `~/.raindrop/raindrop_workshop.db` |
-| `RAINDROP_LOCAL_DEBUGGER` | SDK-side: where to mirror traces | unset |
+| `AGENTTRACE_WORKSHOP_PORT` | HTTP + WS port | `5899` |
+| `AGENTTRACE_WORKSHOP_DB_PATH` | SQLite database file | `~/.raindrop/raindrop_workshop.db` |
+| `AGENTTRACE_LOCAL_DEBUGGER` | SDK-side: where to mirror traces | unset |
 
 ## CLI
 
 ```bash
-raindrop workshop          # start and open UI
-raindrop workshop setup    # write .env, then start and open
-raindrop workshop status   # check health
-raindrop workshop reset    # delete local DB after confirmation
+agenttrace workshop          # start and open UI
+agenttrace workshop setup    # write .env, then start and open
+agenttrace workshop status   # check health
+agenttrace workshop reset    # delete local DB after confirmation
 ```
 
-`raindrop update` is not available via the npm-install path because the npm
+`agenttrace update` is not available via the npm-install path because the npm
 package always carries the latest pre-compiled binary. To update, run
 `npm update -g @grudanov-nikolay/agenttrace`.
 

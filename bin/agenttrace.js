@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * raindrop CLI launcher — npm-distributed entry point for Kolya's fork of
+ * agenttrace CLI launcher — npm-distributed entry point for Kolya's fork of
  * @raindrop/workshop (now: @grudanov-nikolay/agenttrace). Detects the user's
  * platform/arch and spawns the matching pre-compiled Bun binary from
  * binaries/. No runtime dependency on Bun.
@@ -8,7 +8,12 @@
  * Supported: linux-x64, win32-x64. Other platforms print a clear error pointing
  * the user to the GitHub repo where they can build from source.
  *
- * Usage is identical to the binary itself: `raindrop <command> [args...]`.
+ * Usage is identical to the binary itself: `agenttrace <command> [args...]`.
+ *
+ * F-025: renamed from `bin/raindrop.js`. The bundled binary filenames
+ * (`raindrop-linux-x64`, `raindrop-windows-x64.exe`) deliberately stay as they
+ * are — they are the compiled artifacts, not the CLI command, and renaming
+ * them would break already-shipped tarballs.
  */
 "use strict";
 
@@ -46,7 +51,7 @@ function printPlatformError() {
   const supported = Object.keys(PLATFORM_MAP).join(", ");
   process.stderr.write(
     [
-      `raindrop ${VERSION}: your platform (${key}) is not in the pre-built binary set.`,
+      `agenttrace ${VERSION}: your platform (${key}) is not in the pre-built binary set.`,
       `Supported pre-built platforms: ${supported}.`,
       "",
       "Two ways forward:",
@@ -69,7 +74,7 @@ function spawnBinary(bin) {
     env: process.env,
   });
   child.on("error", (err) => {
-    process.stderr.write(`raindrop: failed to spawn ${bin.filePath}: ${err.message}\n`);
+    process.stderr.write(`agenttrace: failed to spawn ${bin.filePath}: ${err.message}\n`);
     process.exit(1);
   });
   child.on("exit", (code, signal) => {

@@ -217,7 +217,7 @@ export async function applyInstallPlan(
       : installCustomMcpServerForAgent(CANONICAL_MCP_SERVER_NAME, mcpConfig, item.agent, item.scope);
 
     // Only after the canonical entry is in place do we remove legacy owned
-    // duplicates (e.g. a pre-rename `raindrop` entry). Exclude the canonical
+    // duplicates (e.g. a pre-rename `agenttrace` entry). Exclude the canonical
     // name so we never delete the entry we just wrote, and skip cleanup
     // entirely if the write failed so we don't strip a still-working config.
     let removedPriorEntries: RemoveOwnedResult[] = [];
