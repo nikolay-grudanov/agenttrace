@@ -3,7 +3,13 @@ import { describe, expect, test } from "bun:test";
 const dbPath = `/tmp/f021-compressions-${process.pid}.db`;
 process.env.RAINDROP_WORKSHOP_DB_PATH = dbPath;
 const { detectCompressions } = await import("../src/agents");
-const { getDrizzleDb, insertSpan, getConvoCompressions } = await import("../src/db");
+const { getDrizzleDb, insertSpan, getConvoCompressions, closeDb } = await import("../src/db");
+
+// `src/db.ts` caches its SQLite handle in a module-level singleton, and Bun
+// runs every test file in ONE process (same `process.pid`). Without this
+// reset, the first test file to touch the DB wins the cached path and every
+// later file writes into the previous file's database.
+closeDb();
 
 function span(p: Partial<Parameters<typeof detectCompressions>[0][number]> & { id: string }) {
   return {

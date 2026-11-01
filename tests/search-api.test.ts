@@ -2,7 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 const dbPath = `/tmp/f008-search-${process.pid}.db`;
 process.env.RAINDROP_WORKSHOP_DB_PATH = dbPath;
-const { getDrizzleDb, insertSpan, searchSpans } = await import("../src/db");
+const { getDrizzleDb, insertSpan, searchSpans, closeDb } = await import("../src/db");
+
+// `src/db.ts` caches its SQLite handle in a module-level singleton, and Bun
+// runs every test file in ONE process (same `process.pid`). Without this
+// reset, the first test file to touch the DB wins the cached path and every
+// later file writes into the previous file's database — so `search-api` would
+// see `compressions`' TOOL_CALL spans and its `spanType` counts would be off.
+closeDb();
 
 const db = getDrizzleDb();
 db.$client.run("INSERT INTO runs (id,started_at,last_updated_at,convo_id) VALUES (?, ?, ?, ?)", ["search-run", 1, 1, "search-convo"]);
