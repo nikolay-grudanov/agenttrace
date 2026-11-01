@@ -52,6 +52,17 @@ export default defineConfig(
     },
   },
   {
+    // CommonJS launcher for the published npm package. It runs under Node
+    // (not Bun), so it needs the Node globals — without this block ESLint
+    // applies the bare `eslint.configs.recommended` rules and flags
+    // `require`/`__dirname`/`process` as undefined no-undef errors.
+    files: ["bin/**/*.js"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: globals.node,
+    },
+  },
+  {
     files: ["web/**/*.mjs"],
     languageOptions: {
       globals: {

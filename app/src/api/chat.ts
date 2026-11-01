@@ -7,7 +7,7 @@ type Role = "user" | "assistant";
 // runtime (which is OpenCode-only — see src/agent-chat.ts:AgentProviderId). The
 // rename to *Agent* types is deferred to F-030 (F-002 keeps them as-is to keep
 // this commit small and reversible).
-export interface ClaudeChatMessageBlock =
+export type ClaudeChatMessageBlock =
   | { type: "text"; text: string }
   | { type: "tool"; id: string; name: string; input_preview?: string; output_preview?: string; ok?: boolean }
   | { type: "thinking"; text: string };

@@ -1232,6 +1232,40 @@ Refs F-024 (chained from — supersedes the "no breaking CLI change" decision do
 
 ## Closed Features
 
+### F-048 — Restore green CI: stale lockfile + missing devDeps + lint config gaps — Closed 2026-10-20
+
+**Context:** CI had been red on **every single push** — 60 consecutive failing runs since 2026-09-16, zero green. The visible symptom in every run was `error: lockfile had changes, but lockfile is frozen`, which reads like a Bun-version drift. It was not. Four independent causes, each hiding the next.
+
+**Cause 1 — stale `bun.lock` (the visible symptom).** `bun.lock` was last regenerated 2026-09-08 (`4b63371`), but `package.json` kept moving afterwards — `b41ae9f` (2026-09-17) bumped `markdown-it` to `^14.1.1` and added `vite` + `@vitejs/plugin-react`. The lockfile never learned about them, so `--frozen-lockfile` correctly refused. Fix: regenerate with Bun 1.4.0 (105-line diff: adds `vite`, `@vitejs/plugin-react`, the `@babel/*` tree, bumps `markdown-it` to 14.3.0). **Bun 1.3.14 and 1.4.0 produce a byte-identical lockfile** and both accept the regenerated one — verified in-container, so CI can stay on either.
+
+**Cause 2 — `typescript-eslint` was dropped from `package.json` by accident.** Commit `6a9ee0e` (F-022, first public alpha) rewrote the whole `devDependencies` block and lost `"typescript-eslint": "^8.59.0"` in the process — while `eslint.config.mjs` still does `import tseslint from "typescript-eslint"`. The old lockfile masked this (it still carried the package), so it only surfaced once the lockfile was regenerated: `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'typescript-eslint'`. Fix: restore the dependency.
+
+**Cause 3 — `bin/raindrop.js` was linted without Node globals.** The CommonJS npm launcher uses `require` / `__dirname` / `process`, but `eslint.config.mjs` only declared `globals.node` for `backendTsFiles` (`src/**`, `tests/**`, `scripts/**`) and `app/src/**`. `bin/**` fell through to bare `eslint.configs.recommended` → 16 `no-undef` errors. Fix: dedicated `bin/**/*.js` block with `sourceType: "commonjs"` + `globals.node`.
+
+**Cause 4 — invalid TypeScript in `app/src/api/chat.ts` (real latent bug, not a CI issue).** `export interface ClaudeChatMessageBlock = | A | B` — an `interface` cannot be a union type. This was invisible because CI's `bun x tsc --noEmit` only covers the root `tsconfig.json` (`include: ["src"]`), never `app/`. ESLint's espree parser surfaced it as `Parsing error: '{' expected`. Fix: `interface` → `type`.
+
+**Verification** (clean checkout of HEAD + these changes, in a container mimicking the GitHub `ubuntu-24.04` runner with Node 24.22.2 + Bun 1.4.0):
+
+| CI step | Before | After |
+|---|---|---|
+| `bun install --frozen-lockfile` | ❌ lockfile had changes | ✅ 1083 packages, no changes |
+| `bun run lint` | ❌ 17 errors | ✅ 0 errors (3 pre-existing `react-hooks` warnings) |
+| `bun x tsc --noEmit` | — | ✅ 0 errors |
+| `bun run test` | — | ✅ 138 pass / 0 fail |
+| `bun scripts/embed-migrations.ts --check` | — | ✅ up to date |
+| `bun run build:ui` | — | ✅ built |
+| `build-bun.ts --target=bun-linux-x64` / `windows-x64` | — | ✅ both compile, non-empty |
+| `build/bun/raindrop-bun-linux-x64 --version` | — | ✅ `0.0.2-local` |
+
+Also pinned `engines.bun: ">=1.3.14"` in `package.json` so the toolchain floor is declared rather than implied by the CI workflow.
+
+**Still open — NOT fixed here (out of scope for CI, tracked as F-049):**
+
+- **The committed `binaries/raindrop-linux-x64` requires `GLIBC_2.43`**, but the CI runner (ubuntu-24.04) has GLIBC 2.39 and the published npm `@grudanov-nikolay/agenttrace@0.0.2` ships that same binary. It fails on ubuntu-22.04/24.04, Debian 12, and Fedora with `libicui18n.so.78: cannot open shared object file`. The binaries were built on Manjaro (GLIBC 2.44). A binary built *inside* ubuntu-24.04 needs only GLIBC 2.17 and runs fine — so the fix is to rebuild the committed binaries on a glibc-2.39-or-older host. CI job 1's `node bin/raindrop.js workshop --help` step exercises the **committed** binary and will keep failing until that is done.
+- `app/` is not type-checked by CI and does not currently pass: `bun x tsc --noEmit -p app/tsconfig.json` reports 134 errors, including a duplicate-`@types/react` conflict (root pins `^19.2.14`, `app/` pins `^18.3.0`) and a missing `AgentLoadout` type in `app/src/api/chat.ts`. Adding `app/` to CI is a separate decision — it would fail immediately.
+
+---
+
 ### F-021 — DCP compression analytics: convo stats, feed, full summaries — Closed 2026-10-08
 
 **Context:** F-020 surfaced individual `compress` tool calls, but Kolya asked for conversation-level visibility: how many compressions happened, what the agent kept in each, and the token economics. The exact token deltas live in DCP's chat notifications — `Compression #N -X removed, +Y summary · M messages and K tools compressed` — which DCP injects into the NEXT LLM request's input messages, so they are parseable from captured LLM spans. Also fixed en route: F-020's detection gate looked for an "opencode-dcp" marker in `attributes`, but the plugin stamps only `ai.toolCall.name` there — the banner silently never rendered on real data. Detection is now by payload shape (`topic` + `content[]` with `startId`/`endId`).
