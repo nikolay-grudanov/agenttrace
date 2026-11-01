@@ -41,7 +41,7 @@ Upstream `raindrop-ai/workshop`: stable since 2026-08-22; sync closed 2026-09-23
 
 ## Active Features
 
-### F-041 — Migrate `agenttrace/.opencode/plugins/graphify.js` to the OpenCode v2 plugin API — OPEN (not started)
+### F-041 — Migrate `agenttrace/.opencode/plugins/graphify.js` to the OpenCode v2 plugin API — implemented 2026-11-01
 
 **Context:** Kolya upgraded to **OpenCode v2.0.32** on 2026-10-19. The v2 loader validates the module default-export with a non-strict zod schema — `{ id, effect }` or `{ id, setup }` — and **every** v1 legacy hook is gone from the binary (`tool.execute.before`, `chat.message`, `experimental.chat.system.transform`: 0 occurrences). `agenttrace/.opencode/plugins/graphify.js` is still v1-shaped, so it logs on every start:
 
@@ -84,11 +84,30 @@ Note it exports a **named** export, not `default` — v2 ignores named exports e
 
 **Out of scope:** no daemon runtime code changes; no version bump / publish (this file is a repo-local dev plugin, never published to npm); no interaction with the trace plugin.
 
+**Implementation notes (2026-11-01) — two v2 gotchas the plan did not anticipate:**
+
+1. **The v2 tool is named `shell`, not `bash`.** The v1 hook filtered on `input.tool === "bash"`, so under v2 the hook fired but matched nothing and silently did nothing. Verified with a probe plugin that writes to a file (the v2 binary **swallows `console.log` from plugins**, so file side-effects are the only observable channel). The hook payload under v2: `{ tool, sessionID, agent, messageID, id, input }`, with `e.tool === "shell"` for shell calls and `e.tool === "compress"` for the compression tool.
+
+2. **Replacing `e.input` wholesale is what reaches the command.** `e.input = { ...args, command }` is the pattern the v2 binary's own built-in plugin uses (`N.input = {...N.input}` in the bundled source). Mutating `e.input.command` in place did not take effect. The v2 loader calls `e.trigger("tool", "execute.before", {...,input})` and ignores the hook's return value, so only in-place mutation of the payload can work — but it has to be the object replacement.
+
+**Also fixed:** the `.opencode/plugins/graphify.js` entry in `.opencode/opencode.json` was removed. Under v2 a *relative* plugin spec is resolved against the **config dir** (`~/.opencode/`), not the project, so it failed with `NpmInstallFailedError … ENOENT /home/gna/.opencode/plugins/graphify.js/package.json`. The file is auto-discovered from the project's `.opencode/plugins/` directory, so the config entry was both broken and redundant. Note the project config still uses the v1 key `plugin` (singular) — under v2 the key is `plugins`; the singular key is ignored, which is why auto-discovery is what actually loads the plugin.
+
+**Verification** (OpenCode **v2.0.32** — note the v2 binary lives at `~/.opencode/bin/opencode`, while the `opencode` on PATH is the older 1.18.18):
+
+- `bun --check .opencode/plugins/graphify.js` → exit 0
+- plugin loads with **no** `failed to load plugin` entry (counter unchanged across a run; the 120 historical graphify failures in the log are from before the fix)
+- end-to-end: a real `opencode run` produced a captured span whose command is
+  `echo "[graphify] knowledge graph at graphify-out/. …" && echo FINAL_F041_CHECK`
+  — i.e. the reminder is genuinely prepended to the executed shell command
+
 **Todos:**
-- [ ] Migrate `graphify.js` to `{ id, setup, server }` + `ctx.tool.hook`
-- [ ] Kill the bogus relative `.opencode/plugins/graphify.js` discovery entry
-- [ ] `opencode plugin list` + log verification
-- [ ] Commit (Kolya command — no auto-commit)
+- [x] Migrate `graphify.js` to `{ id, setup, server }` + `ctx.tool.hook`
+- [x] Accept both tool names (`bash` for v1, `shell` for v2)
+- [x] Replace `e.input` wholesale so the rewrite reaches the command
+- [x] Kill the bogus relative `.opencode/plugins/graphify.js` discovery entry
+- [x] Log verification: no `failed to load plugin` for either path
+- [x] End-to-end: reminder prepended in the captured span
+- [x] Commit
 
 ### F-039 — Process improvement layer: analyst-agent over executor-agent (system around the agent, not the agent itself)
 
