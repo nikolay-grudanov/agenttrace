@@ -71,7 +71,7 @@ export function spawnTsExample(opts: { name: string; port: number; workshopUrl: 
       ...process.env,
       ...opts.extraEnv,
       PORT: String(opts.port),
-      RAINDROP_LOCAL_DEBUGGER: `${opts.workshopUrl}/v1/`,
+      AGENTTRACE_LOCAL_DEBUGGER: `${opts.workshopUrl}/v1/`,
     },
     port: opts.port,
     label: opts.name,
@@ -86,7 +86,7 @@ export function spawnPythonExample(opts: { port: number; workshopUrl: string; ve
     env: {
       ...process.env,
       PORT: String(opts.port),
-      RAINDROP_LOCAL_DEBUGGER: `${opts.workshopUrl}/v1/`,
+      AGENTTRACE_LOCAL_DEBUGGER: `${opts.workshopUrl}/v1/`,
     },
     port: opts.port,
     label: "python",
@@ -101,7 +101,7 @@ export function spawnRustExample(opts: { port: number; workshopUrl: string; binP
     env: {
       ...process.env,
       PORT: String(opts.port),
-      RAINDROP_LOCAL_DEBUGGER: `${opts.workshopUrl}/v1/`,
+      AGENTTRACE_LOCAL_DEBUGGER: `${opts.workshopUrl}/v1/`,
     },
     port: opts.port,
     label: "rust",
@@ -116,7 +116,7 @@ export function spawnGoExample(opts: { port: number; workshopUrl: string; binPat
     env: {
       ...process.env,
       PORT: String(opts.port),
-      RAINDROP_LOCAL_DEBUGGER: `${opts.workshopUrl}/v1/`,
+      AGENTTRACE_LOCAL_DEBUGGER: `${opts.workshopUrl}/v1/`,
     },
     port: opts.port,
     label: "go",

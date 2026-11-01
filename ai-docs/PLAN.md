@@ -25,7 +25,7 @@ Stack state: both packages published on npm under the new `agenttrace` names (`0
 - **T1-E. F-034 — twin-runs bug (`message_id` ingested as two runs)** (~2–4 h, cross-repo plugin + daemon) — needs a repro; plugin side lands first.
 - **T1-F. F-032 — full i18n sweep** (~1–2 days) — includes the preset-prompt bug (RU UI sends an EN prompt to OpenCode).
 - **T1-G. F-031 — skills/ docs: drop Claude-Agent-SDK framing** (~1–2 h).
-- **T1-E2. F-043 — daemon `RAINDROP_*` runtime env vars → `AGENTTRACE_*`** (~3–4 h, env only) — **45** unique vars, grep-verified. On-disk paths (`~/.raindrop/**`) explicitly **not** renamed (Kolya 2026-10-19). Must ship in the same `0.1.0` as F-037/F-042 because the plugin's F-006 sidepanel writes `RAINDROP_WORKSHOP_*` into the generated `opencode.json` that this daemon reads.
+- **T1-E2. F-043 — daemon `RAINDROP_*` runtime env vars → `AGENTTRACE_*` + telemetry-prefix dual-read — IMPLEMENTED 2026-10-20 (uncommitted)** — **48** unique vars (three more than the original estimate), grep-verified. Also renames the build-time defines (`__RAINDROP_VERSION__`, `__RAINDROP_ASSETS_BASE_URL__`) and regenerates `src/skills.compiled.ts`. Adds the **dual-read** for `ai.telemetry.metadata.agenttrace.*` (new) and `.raindrop.*` (historical runs in SQLite) in `src/parse.ts` + `src/agents-config.ts` — without it, every trace would have silently lost its ids. On-disk paths (`~/.raindrop/**`) explicitly **not** renamed (Kolya 2026-10-19). Ships in the same `0.1.0` as F-037/F-042 because the plugin's F-006 sidepanel writes `AGENTTRACE_WORKSHOP_*` into the generated `opencode.json` that this daemon reads. **Kolya must restart the daemon** for the dual-read to take effect.
 - **T1-H. F-025 — CLI command `raindrop` → `agenttrace`** (~5–7 h, was 7–10 h) — **all questions closed** by Kolya on 2026-10-19: Q1 rename env (hard cut, no dual), Q2 **keep** `~/.raindrop/` paths (Stage 3 dropped), Q4 accept **both** `agenttrace serve` and `agenttrace workshop serve`. Q5 version `0.0.3` superseded — now rides `0.1.0`.
 - **T1-I. F-038-A / F-039-A — feedback-loop foundations** (1–2 weeks, ship per sub-feature) — strategic direction: MCP self-diagnosis + analyst-agent artifacts. Recommended order in F-038/F-039 entries.
 - **T1-J. Git LFS for binaries** (~1 h) — 79 MB / 99 MB files still trigger the GitHub large-file warning on every push.
@@ -244,7 +244,7 @@ Kolya's scenario names two agents (executor + analyst). Workshop is the substrat
 
 ---
 
-### F-043 — Rename daemon `RAINDROP_*` runtime env vars to `AGENTTRACE_*` (env only, no path renames) — OPEN (not started)
+### F-043 — Rename daemon `RAINDROP_*` runtime env vars to `AGENTTRACE_*` + dual-read telemetry prefixes — implemented 2026-10-20 (uncommitted)
 
 **Context:** Kolya 2026-10-19, verbatim: «1. Файлы настроек» демона не переименовать везде · 2. да нужно переменовать · 3. жёстко, "пользователи сами переменуют"». Follow-up the same day: «2. убери тоже, достаточно в ридми описания что это форк и ссылки на проект оригинал» — the "Raindrop AI" attribution leaves `LICENSE` / `AGENTS.md` and moves to `README.md` as an explicit fork notice.
 
@@ -356,19 +356,44 @@ F-025 previously scoped this as "Q1: 5 daemon env vars". A grep inventory on 202
 
 **Reference:** Kolya exchange 2026-10-19 (verbatim, quoted at the top of F-037 in this PLAN).
 
+**Implementation notes (2026-10-20) — deviations from the plan above:**
+
+1. **48 unique vars, not 45.** The pre-implementation grep found three more than the inventory above. All renamed.
+
+2. **The telemetry-prefix dual-read is the part that actually mattered.** Renaming the plugin's OTLP attribute prefix (`ai.telemetry.metadata.raindrop.*` → `ai.telemetry.metadata.agenttrace.*`, done in F-042) without touching the daemon would have silently dropped `event_id` / `event_name` / `user_id` / `convo_id` / `properties` / `replay_run_id` from every trace — no error, just empty fields in the UI. Implemented in two places:
+   - `src/parse.ts` — `first(attrs, ...keys)` is variadic, so the `agenttrace.` key was simply added **first** in each call (`eventId`, `eventName`, `userId` incl. the `ai.userId` variant, `convoId`, `replayRunId`); `properties` uses `getAttr(agenttrace.properties) ?? getAttr(raindrop.properties)`.
+   - `src/agents-config.ts` — this one needed real logic. `contextMapping` comes from the user's `~/.raindrop/agents.yaml`, which Kolya explicitly excluded from renaming, so user-authored paths still spell the legacy prefix. Added `TELEMETRY_PREFIX` / `TELEMETRY_LEGACY_PREFIX` constants and a canonicalisation pass that copies every legacy key onto its `agenttrace.` twin (only when absent), plus canonicalisation of each `attrPath` from the mapping before the lookup. Both prefixes now resolve.
+   The fallback is deliberate and not a back-compat regression: every run already stored in SQLite carries the legacy prefix. This is telemetry-in-storage compatibility, not config/env compatibility, and is scoped to *reading* — nothing writes the legacy prefix any more.
+
+3. **Build-time defines renamed too.** `__RAINDROP_VERSION__` and `__RAINDROP_ASSETS_BASE_URL__` → `__AGENTTRACE_*` across `scripts/build-bun.ts`, `src/version.ts`, `app/src/vite-env.d.ts` and `app/vite.config.ts`. `app/vite.config.ts` is easy to miss because it lives under `app/`, not `app/src/`.
+
+4. **`src/skills.compiled.ts` regenerated, not hand-edited.** Sources are `skills/setup-agent-replay/SKILL.md` and `skills/instrument-agent/SKILL.md`; after renaming those, ran `bun scripts/embed-skills.ts`.
+
+5. **Tests carried hardcoded `RAINDROP_*` expectations** and regressed to 124 pass / 24 fail until they were renamed in step with the code (`tests/presetPrompts`, `tests/opencode-cli-chat`, `tests/search-api`, `tests/compressions`, plus the e2e fixtures under `app/tests-e2e/`). Back to baseline.
+
+6. **`MessagePane.tsx` MCP-prefix dual detection.** The plugin's F-006 sidepanel registers its server as plain `workshop`, so live tools arrive as `mcp__workshop__*`; historical runs in SQLite carry `mcp__raindrop__*` / `mcp__raindrop_workshop__*`. `isAgenttraceMcpTool` now accepts the new prefix first while keeping the legacy ones, and `isAskAgentTool` also matches `mcp__workshop__ask_agent`. Without this, every historical run would have rendered its tool calls as plain text.
+
+7. **Deliberately untouched:** `bin/raindrop-dev` (upstream bash), `@raindrop-ai/*` npm namespace (comments only — that namespace belongs to Raindrop AI), and every `~/.raindrop/**` path. Verified after the sweep: `src/db.ts:26` still resolves `~/.raindrop/raindrop_workshop.db` and `src/index.ts:51` still defines `STATE_DIR` as `~/.raindrop`.
+
+8. **Verification (all green, baselines confirmed via `git stash`):** `bun x tsc --noEmit` exit 0 · `bun test` 138 pass / 10 fail (= baseline; the 10 are the pre-existing Playwright config errors from `bun test` picking up `app/tests-e2e/*.spec.ts`) · `bun run lint` 20 problems (= baseline, all pre-existing) · `bun run build:ui` exit 0.
+
 **Todos:**
 
-- [ ] Re-grep `RAINDROP_[A-Z_]+` to confirm the 45-var list is still current before starting.
-- [ ] Mechanical rename in `src/` (12 files).
-- [ ] Mechanical rename in `app/src/` (2 files, plus `MessagePane.tsx` dual-detect).
-- [ ] Mechanical rename in `scripts/` (3 shell scripts).
-- [ ] Mechanical rename in `bin/`.
-- [ ] Regenerate `src/skills.compiled.ts` from source.
-- [ ] Verify zero runtime `RAINDROP_*` reads remain.
-- [ ] Verify `~/.raindrop/**` unchanged (before/after diff).
-- [ ] Update README.md + AGENTS.md env tables.
-- [ ] Verify F-042 (plugin) writes the matching `AGENTTRACE_WORKSHOP_*` env names.
-- [ ] Update F-043 to Closed; move to `## Closed Features`
+- [x] Re-grep `RAINDROP_[A-Z_]+` — found 48, three more than the inventory above.
+- [x] Mechanical rename in `src/` (including `MessagePane`-adjacent helpers in `app/src/`).
+- [x] Mechanical rename in `app/src/` + `MessagePane.tsx` dual-detect.
+- [x] Mechanical rename in `scripts/`.
+- [x] Rename build-time defines in `scripts/build-bun.ts`, `src/version.ts`, `app/src/vite-env.d.ts`, `app/vite.config.ts`.
+- [x] Rename in `skills/*/SKILL.md`, regenerate `src/skills.compiled.ts` via `bun scripts/embed-skills.ts`.
+- [x] Rename in `tests/` + `app/tests-e2e/` fixtures.
+- [x] Dual-read for `ai.telemetry.metadata.agenttrace.*` / `.raindrop.*` in `src/parse.ts` + `src/agents-config.ts`.
+- [x] Verify zero runtime `RAINDROP_*` reads remain (grep clean across `src`, `app/src`, `app/tests-e2e`, `app/vite.config.ts`, `scripts`, `skills`, `drizzle`, `package.json`, `tests`).
+- [x] Verify `~/.raindrop/**` unchanged.
+- [x] Verify F-042 (plugin) writes the matching `AGENTTRACE_WORKSHOP_*` env names.
+- [x] `bun x tsc --noEmit`, `bun test`, `bun run lint`, `bun run build:ui` — all at baseline.
+- [ ] **Kolya must restart the daemon** — the dual-read is in the source but the running process still only reads the legacy prefix.
+- [ ] Bump `0.0.2 → 0.1.0` and publish (with F-025 / F-036 / F-037 / F-042).
+- [ ] Update F-043 to Closed; move to `## Closed Features`.
 
 ---
 

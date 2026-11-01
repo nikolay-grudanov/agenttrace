@@ -210,10 +210,10 @@ export function parseOtlpRequest(body: any): ParsedSpan[] {
         const inputTokens = first(attrs, "ai.usage.inputTokens", "ai.usage.promptTokens", "ai.usage.prompt_tokens", "gen_ai.usage.input_tokens", "gen_ai.usage.prompt_tokens") as number | undefined;
         const outputTokens = first(attrs, "ai.usage.outputTokens", "ai.usage.completionTokens", "ai.usage.completion_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.completion_tokens") as number | undefined;
 
-        const eventId = first(attrs, "ai.telemetry.metadata.raindrop.eventId", "ai.telemetry.metadata.traceloop.association.properties.event_id", "traceloop.association.properties.event_id", "traceloop.association.properties.traceloop.association.properties.event_id") as string | undefined;
-        const eventName = first(attrs, "ai.telemetry.metadata.raindrop.eventName", "ai.telemetry.metadata.traceloop.association.properties.event_name", "traceloop.association.properties.event_name", "traceloop.association.properties.traceloop.association.properties.event_name") as string | undefined;
-        const userId = first(attrs, "ai.telemetry.metadata.raindrop.userId", "ai.telemetry.metadata.raindrop.ai.userId", "ai.telemetry.metadata.traceloop.association.properties.user_id", "traceloop.association.properties.user_id", "traceloop.association.properties.traceloop.association.properties.user_id") as string | undefined;
-        const convoId = first(attrs, "ai.telemetry.metadata.raindrop.convoId", "ai.telemetry.metadata.traceloop.association.properties.convo_id", "traceloop.association.properties.convo_id", "traceloop.association.properties.traceloop.association.properties.convo_id") as string | undefined;
+        const eventId = first(attrs, "ai.telemetry.metadata.agenttrace.eventId", "ai.telemetry.metadata.raindrop.eventId", "ai.telemetry.metadata.traceloop.association.properties.event_id", "traceloop.association.properties.event_id", "traceloop.association.properties.traceloop.association.properties.event_id") as string | undefined;
+        const eventName = first(attrs, "ai.telemetry.metadata.agenttrace.eventName", "ai.telemetry.metadata.raindrop.eventName", "ai.telemetry.metadata.traceloop.association.properties.event_name", "traceloop.association.properties.event_name", "traceloop.association.properties.traceloop.association.properties.event_name") as string | undefined;
+        const userId = first(attrs, "ai.telemetry.metadata.agenttrace.userId", "ai.telemetry.metadata.agenttrace.ai.userId", "ai.telemetry.metadata.raindrop.userId", "ai.telemetry.metadata.raindrop.ai.userId", "ai.telemetry.metadata.traceloop.association.properties.user_id", "traceloop.association.properties.user_id", "traceloop.association.properties.traceloop.association.properties.user_id") as string | undefined;
+        const convoId = first(attrs, "ai.telemetry.metadata.agenttrace.convoId", "ai.telemetry.metadata.raindrop.convoId", "ai.telemetry.metadata.traceloop.association.properties.convo_id", "traceloop.association.properties.convo_id", "traceloop.association.properties.traceloop.association.properties.convo_id") as string | undefined;
         // replayRunId is the canonical "this run is a replay of <placeholder>" stitch key.
         // Workshop's UI sets it on every replay; the agent must echo it back so we can match
         // its OTLP traces to the placeholder run created at click-time.
@@ -230,11 +230,13 @@ export function parseOtlpRequest(body: any): ParsedSpan[] {
         //      is "put it in properties" — works across every SDK wrapper.
         let replayRunId = first(
           attrs,
+          "ai.telemetry.metadata.agenttrace.replayRunId",
           "ai.telemetry.metadata.raindrop.replayRunId",
           "traceloop.association.properties.replayRunId",
         ) as string | undefined;
         if (!replayRunId) {
-          const propsStr = getAttr(attrs, "ai.telemetry.metadata.raindrop.properties") as string | undefined;
+          const propsStr = (getAttr(attrs, "ai.telemetry.metadata.agenttrace.properties")
+            ?? getAttr(attrs, "ai.telemetry.metadata.raindrop.properties")) as string | undefined;
           if (propsStr) {
             try {
               const props = JSON.parse(propsStr);

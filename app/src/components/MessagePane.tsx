@@ -1818,7 +1818,7 @@ function copyTextWithTextarea(text: string): boolean {
 function TraceDebugPrompt({ onPrompt }: { onPrompt: (prompt: string) => void }) {
   // F-015: data-driven prompt chips. Labels resolve through the i18n hook
   // (F-016). Override at runtime via
-  // `window.RAINDROP_PRESET_PROMPTS = [{id,labelKey,prompt}, ...]`.
+  // `window.AGENTTRACE_PRESET_PROMPTS = [{id,labelKey,prompt}, ...]`.
   const prompts = resolvePresetPrompts();
   const { t } = useT();
   return (
@@ -1913,8 +1913,8 @@ function ThinkingActivityCard({ text }: { text: string }) {
 function ToolActivityCard({ block }: { block: Extract<AssistantMessageBlock, { type: "tool" }> }) {
   const failed = block.ok === false;
   const running = block.state === "running";
-  const isRaindropCloudTool = isRaindropCloudMcpTool(block.name);
-  const isRaindropTool = isRaindropMcpTool(block.name);
+  const isAgenttraceCloudTool = isAgenttraceCloudMcpTool(block.name);
+  const isAgenttraceTool = isAgenttraceMcpTool(block.name);
   const displayName = compactToolName(block.name);
   const hasPreview = Boolean(block.input_preview || block.output_preview);
 
@@ -1924,13 +1924,13 @@ function ToolActivityCard({ block }: { block: Extract<AssistantMessageBlock, { t
       title={block.name}
     >
       <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 py-0.5 outline-none">
-        {isRaindropCloudTool ? (
+        {isAgenttraceCloudTool ? (
           <Cloud
             className={`activity-icon h-3.5 w-3.5 shrink-0 ${
               failed ? "text-red-200/75" : running ? "animate-pulse text-sky-100/70" : "text-sky-100/65"
             }`}
           />
-        ) : isRaindropTool ? (
+        ) : isAgenttraceTool ? (
           <RaindropLogo
             size={14}
             className={`activity-icon shrink-0 ${running ? "animate-pulse" : ""}`}
@@ -1972,11 +1972,20 @@ function compactToolName(name: string): string {
   return parts.length > 2 ? parts.slice(2).join("__") : name;
 }
 
-function isRaindropMcpTool(name: string): boolean {
-  return name.startsWith("mcp__raindrop__") || name.startsWith("mcp__raindrop_workshop__") || name.startsWith("raindrop_workshop.");
+// KOLYA PATCH (F-043): dual detection. Runs captured before the F-042 rename
+// carry the `mcp__raindrop__*` prefix in SQLite; the plugin's F-006 sidepanel
+// registers its MCP server as plain `workshop`, so live tools arrive as
+// `mcp__workshop__*`. Both are accepted so historical runs keep rendering.
+function isAgenttraceMcpTool(name: string): boolean {
+  return (
+    name.startsWith("mcp__workshop__") ||
+    name.startsWith("mcp__raindrop__") ||
+    name.startsWith("mcp__raindrop_workshop__") ||
+    name.startsWith("raindrop_workshop.")
+  );
 }
 
-const RAINDROP_CLOUD_TOOL_NAMES = new Set([
+const AGENTTRACE_CLOUD_TOOL_NAMES = new Set([
   "get_dashboard",
   "list_events",
   "get_event",
@@ -2004,11 +2013,11 @@ const RAINDROP_CLOUD_TOOL_NAMES = new Set([
   "get_write_key",
 ]);
 
-function isRaindropCloudMcpTool(name: string): boolean {
+function isAgenttraceCloudMcpTool(name: string): boolean {
   if (name.startsWith("mcp__raindrop_cloud__") || name.startsWith("raindrop_cloud.")) return true;
-  if (isRaindropMcpTool(name)) return false;
+  if (isAgenttraceMcpTool(name)) return false;
   if (name.startsWith("mcp__")) return false;
-  return RAINDROP_CLOUD_TOOL_NAMES.has(name);
+  return AGENTTRACE_CLOUD_TOOL_NAMES.has(name);
 }
 
 function AgentAskCard({ block }: { block: Extract<AssistantMessageBlock, { type: "tool" }> }) {
@@ -2094,7 +2103,7 @@ function AgentAskCard({ block }: { block: Extract<AssistantMessageBlock, { type:
 }
 
 function isAskAgentTool(name: string): boolean {
-  return name === "ask_agent" || name === "mcp__raindrop__ask_agent" || name.endsWith("__ask_agent");
+  return name === "ask_agent" || name === "mcp__raindrop__ask_agent" || name === "mcp__workshop__ask_agent" || name.endsWith("__ask_agent");
 }
 
 function parseAgentToolResult(output: string | undefined): Record<string, unknown> | null {

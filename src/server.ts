@@ -133,7 +133,7 @@ function allowedIngestCorsOrigin(
   }
 }
 
-const DEMO_CHAT_MODEL = process.env.RAINDROP_DEMO_CHAT_MODEL ?? "gpt-5.5-nano";
+const DEMO_CHAT_MODEL = process.env.AGENTTRACE_DEMO_CHAT_MODEL ?? "gpt-5.5-nano";
 
 type DemoChatMessage = {
   role: "system" | "user" | "assistant";
@@ -408,7 +408,7 @@ export async function createServer(port: number) {
   // source addresses (Docker bridge, local VMs) are also permitted at the
   // socket layer so containers on the same host can reach the daemon. Empty by
   // default: Workshop stays loopback-only unless the operator opts in.
-  const allowedHosts = parseAllowedHostsEnv(process.env.RAINDROP_WORKSHOP_ALLOWED_HOSTS);
+  const allowedHosts = parseAllowedHostsEnv(process.env.AGENTTRACE_WORKSHOP_ALLOWED_HOSTS);
   const allowNonLoopbackRemote = allowedHosts.size > 0;
   const isAllowedRemoteAddress = (address: string | undefined | null): boolean =>
     allowNonLoopbackRemote ? isPrivateRemoteAddress(address) : isLoopbackRemoteAddress(address);
@@ -438,7 +438,7 @@ export async function createServer(port: number) {
 
   const viewingRegistry = createViewingRegistry();
   const localOriginGuard = createLocalOriginGuard({
-    extraAllowedOrigins: parseAllowedOriginsEnv(process.env.RAINDROP_WORKSHOP_ALLOWED_ORIGINS),
+    extraAllowedOrigins: parseAllowedOriginsEnv(process.env.AGENTTRACE_WORKSHOP_ALLOWED_ORIGINS),
   });
 
   function hasConnectedUi(): boolean {
@@ -1410,7 +1410,7 @@ export async function createServer(port: number) {
       });
     } catch (err) {
       const message = /ENOENT/.test((err as Error).message)
-        ? "OpenCode CLI (opencode) not found on PATH. Install it or set RAINDROP_WORKSHOP_OPENCODE_BIN."
+        ? "OpenCode CLI (opencode) not found on PATH. Install it or set AGENTTRACE_WORKSHOP_OPENCODE_BIN."
         : (err as Error).message || "OpenCode chat failed";
       res.status(500).json({
         error: message,

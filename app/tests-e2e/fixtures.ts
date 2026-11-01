@@ -64,8 +64,8 @@ export const test = base.extend<{ workshop: WorkshopHandle }, { workshopWorker: 
         cwd: REPO_ROOT,
         env: {
           ...process.env,
-          RAINDROP_WORKSHOP_PORT: String(port),
-          RAINDROP_WORKSHOP_DB_PATH: dbPath,
+          AGENTTRACE_WORKSHOP_PORT: String(port),
+          AGENTTRACE_WORKSHOP_DB_PATH: dbPath,
         },
         stdio: ["ignore", "pipe", "pipe"],
       });

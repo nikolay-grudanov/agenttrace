@@ -4,6 +4,11 @@ import os from "os";
 import { spawn } from "child_process";
 
 const STATE_DIR = path.join(os.homedir(), ".raindrop");
+// KOLYA PATCH (F-043): telemetry attribute prefixes. `TELEMETRY_PREFIX` is what
+// the plugin emits since the F-042 rename; `TELEMETRY_LEGACY_PREFIX` is what
+// every run already stored in SQLite was written with. Both are read.
+const TELEMETRY_PREFIX = "ai.telemetry.metadata.agenttrace.";
+const TELEMETRY_LEGACY_PREFIX = "ai.telemetry.metadata.raindrop.";
 const LEGACY_CONFIG_PATH = path.join(STATE_DIR, "agents.json");
 const REPLAY_PROJECTS_PATH = path.join(STATE_DIR, "replay-projects.json");
 const REPLAY_PORT_START = 61020;
@@ -461,7 +466,7 @@ function spawnReplayCommand(config: AgentConfig): string | null {
     stdio: ["ignore", out, out],
     env: {
       ...process.env,
-      RAINDROP_LOCAL_DEBUGGER: process.env.RAINDROP_LOCAL_DEBUGGER ?? "http://localhost:5899/v1/",
+      AGENTTRACE_LOCAL_DEBUGGER: process.env.AGENTTRACE_LOCAL_DEBUGGER ?? "http://localhost:5899/v1/",
     },
   });
   child.unref();
@@ -583,14 +588,30 @@ export function extractContextFromTrace(
     } catch {}
   }
 
-  const propsStr = allAttrs["ai.telemetry.metadata.raindrop.properties"];
+  // KOLYA PATCH (F-043): accept both telemetry prefixes. The plugin emits
+  // `ai.telemetry.metadata.agenttrace.*` since the F-042 rename, but
+  // `~/.raindrop/agents.yaml` is one of the on-disk paths Kolya explicitly
+  // excluded from renaming, so user-authored `contextMapping` entries still
+  // spell the legacy prefix. Canonicalise every collected key to `agenttrace.`
+  // so the lookups below work against a single prefix regardless of what the
+  // caller wrote.
+  for (const [k, v] of Object.entries(allAttrs)) {
+    if (!k.startsWith(TELEMETRY_LEGACY_PREFIX)) continue;
+    const canonical = TELEMETRY_PREFIX + k.slice(TELEMETRY_LEGACY_PREFIX.length);
+    if (allAttrs[canonical] === undefined) allAttrs[canonical] = v;
+  }
+
+  const propsStr = allAttrs[TELEMETRY_PREFIX + "properties"] ?? allAttrs[TELEMETRY_LEGACY_PREFIX + "properties"];
   let props: Record<string, any> = {};
   if (propsStr) {
     try { props = typeof propsStr === "string" ? JSON.parse(propsStr) : propsStr; } catch {}
   }
 
   const context: Record<string, any> = {};
-  for (const [field, attrPath] of Object.entries(contextMapping)) {
+  for (const [field, rawAttrPath] of Object.entries(contextMapping)) {
+    const attrPath = rawAttrPath.startsWith(TELEMETRY_LEGACY_PREFIX)
+      ? TELEMETRY_PREFIX + rawAttrPath.slice(TELEMETRY_LEGACY_PREFIX.length)
+      : rawAttrPath;
     if (allAttrs[attrPath] !== undefined) {
       context[field] = allAttrs[attrPath];
       continue;
@@ -602,17 +623,15 @@ export function extractContextFromTrace(
         continue;
       }
     }
-    const raindropPrefix = "ai.telemetry.metadata.raindrop.properties.";
-    if (attrPath.startsWith(raindropPrefix)) {
-      const propKey = attrPath.slice(raindropPrefix.length);
+    if (attrPath.startsWith(TELEMETRY_PREFIX + "properties.")) {
+      const propKey = attrPath.slice((TELEMETRY_PREFIX + "properties.").length);
       if (props[propKey] !== undefined) {
         context[field] = props[propKey];
         continue;
       }
     }
-    const metaPrefix = "ai.telemetry.metadata.raindrop.";
-    if (attrPath.startsWith(metaPrefix)) {
-      const metaKey = metaPrefix + attrPath.slice(metaPrefix.length);
+    if (attrPath.startsWith(TELEMETRY_PREFIX)) {
+      const metaKey = TELEMETRY_PREFIX + attrPath.slice(TELEMETRY_PREFIX.length);
       if (allAttrs[metaKey] !== undefined) {
         context[field] = allAttrs[metaKey];
         continue;

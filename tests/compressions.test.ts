@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const dbPath = `/tmp/f021-compressions-${process.pid}.db`;
-process.env.RAINDROP_WORKSHOP_DB_PATH = dbPath;
+process.env.AGENTTRACE_WORKSHOP_DB_PATH = dbPath;
 const { detectCompressions } = await import("../src/agents");
 const { getDrizzleDb, insertSpan, getConvoCompressions, closeDb } = await import("../src/db");
 

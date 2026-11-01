@@ -19,7 +19,7 @@ export function isLoopbackRemoteAddress(address: string | undefined | null): boo
  * i.e. the ranges a container or VM on the same host reaches Workshop from
  * (e.g. the Docker bridge gateway `172.17.0.1` on Linux or `192.168.65.x` on
  * Docker Desktop). Only consulted when the operator has opted a listener open
- * to the local network via RAINDROP_WORKSHOP_ALLOWED_HOSTS; it still excludes
+ * to the local network via AGENTTRACE_WORKSHOP_ALLOWED_HOSTS; it still excludes
  * public addresses so a broadly-bound daemon can't be reached from the WAN.
  */
 export function isPrivateRemoteAddress(address: string | undefined | null): boolean {
@@ -50,7 +50,7 @@ export function isPrivateRemoteAddress(address: string | undefined | null): bool
 }
 
 /**
- * Parse RAINDROP_WORKSHOP_ALLOWED_HOSTS into a set of bare, lowercased
+ * Parse AGENTTRACE_WORKSHOP_ALLOWED_HOSTS into a set of bare, lowercased
  * hostnames accepted in the Host header (and, when present, the Origin
  * hostname). Entries may include a port (`host.docker.internal:5899`) or even
  * be pasted as a full URL (`http://host.docker.internal:5899/`); both are
@@ -64,7 +64,7 @@ export function parseAllowedHostsEnv(value: string | undefined | null): Set<stri
   for (const raw of value.split(",")) {
     let trimmed = raw.trim().toLowerCase();
     if (!trimmed) continue;
-    // Tolerate URL-shaped entries (a common copy/paste from RAINDROP_LOCAL_DEBUGGER).
+    // Tolerate URL-shaped entries (a common copy/paste from AGENTTRACE_LOCAL_DEBUGGER).
     if (trimmed.includes("://")) {
       try {
         trimmed = new URL(raw.trim()).hostname.toLowerCase();

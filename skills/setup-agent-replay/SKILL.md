@@ -152,7 +152,7 @@ Replay should exercise the agent with as few side effects as possible. Before wi
 Before invoking the agent, set:
 
 ```typescript
-process.env.RAINDROP_LOCAL_DEBUGGER = "http://localhost:5899/v1/";
+process.env.AGENTTRACE_LOCAL_DEBUGGER = "http://localhost:5899/v1/";
 ```
 
 Do not pass `replayRunId` through an environment variable.
@@ -340,7 +340,7 @@ Verify all of the following:
 - The replay emitted traces back to Workshop.
 - You can see the replay trace in Workshop, either by MCP/querying the run or by opening it in the UI.
 
-If the replay returns `missing_replay_agent` or says to run `/setup-agent-replay`, fix registration/startup and retry. If the replay server starts but no traces appear, fix `RAINDROP_LOCAL_DEBUGGER` and SDK metadata stitching before stopping.
+If the replay returns `missing_replay_agent` or says to run `/setup-agent-replay`, fix registration/startup and retry. If the replay server starts but no traces appear, fix `AGENTTRACE_LOCAL_DEBUGGER` and SDK metadata stitching before stopping.
 
 ## Output
 

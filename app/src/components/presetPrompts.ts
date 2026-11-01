@@ -5,7 +5,7 @@
  * chips when the chat is empty and a run is focused. Adding a chip previously
  * required editing the JSX inline; this module turns the chips into a data
  * table so new entries are one-line additions and can be extended at runtime
- * (deployers can override via `window.RAINDROP_PRESET_PROMPTS`).
+ * (deployers can override via `window.AGENTTRACE_PRESET_PROMPTS`).
  *
  * Labels are i18n keys, not strings — see `app/src/i18n/locales/en.json`
  * (`chat.preset.*`). The `prompt` field is sent verbatim to the agent and is
@@ -44,13 +44,13 @@ export const PRESET_PROMPTS: PresetPrompt[] = [
 ];
 
 /**
- * Resolve the effective list of preset prompts. Reads `window.RAINDROP_PRESET_PROMPTS`
+ * Resolve the effective list of preset prompts. Reads `window.AGENTTRACE_PRESET_PROMPTS`
  * once (a JSON array of `PresetPrompt`-shaped objects) — if present, validated
  * minimally and used. Otherwise returns the bundled `PRESET_PROMPTS`. Safe to
  * call from render (read-only access to `globalThis`).
  */
 export function resolvePresetPrompts(): PresetPrompt[] {
-  const override = (globalThis as unknown as { RAINDROP_PRESET_PROMPTS?: unknown }).RAINDROP_PRESET_PROMPTS;
+  const override = (globalThis as unknown as { AGENTTRACE_PRESET_PROMPTS?: unknown }).AGENTTRACE_PRESET_PROMPTS;
   if (!Array.isArray(override)) return PRESET_PROMPTS;
   const cleaned: PresetPrompt[] = [];
   for (const item of override) {

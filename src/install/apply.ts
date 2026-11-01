@@ -77,7 +77,7 @@ interface ResolveMcpConfigRuntime {
   defaultBinPath: string;
 }
 
-const RAINDROP_BIN_PATH_ENV = "RAINDROP_BIN_PATH";
+const AGENTTRACE_BIN_PATH_ENV = "AGENTTRACE_BIN_PATH";
 const MCP_ARGS = ["workshop", "mcp"] as const;
 
 function isRaindropBinary(file: string): boolean {
@@ -110,7 +110,7 @@ function resolveMcpServerConfig(
     return { command: path.resolve(override), args: [...MCP_ARGS] };
   }
 
-  const envBin = runtime.env[RAINDROP_BIN_PATH_ENV];
+  const envBin = runtime.env[AGENTTRACE_BIN_PATH_ENV];
   if (envBin) {
     return { command: absolutePath(envBin, runtime.cwd), args: [...MCP_ARGS] };
   }
@@ -266,5 +266,5 @@ export const _internal = {
   collectReplacedEntries,
   collectCleanupFailures,
   mcpCleanupWarnings,
-  RAINDROP_BIN_PATH_ENV,
+  AGENTTRACE_BIN_PATH_ENV,
 };

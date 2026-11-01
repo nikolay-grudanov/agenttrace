@@ -195,7 +195,7 @@ async function main(): Promise<void> {
   });
 
   // 4. Run install.sh exactly the way a customer would.
-  //    RAINDROP_INSECURE_PROTO=1 disables curl's --proto '=https' so we
+  //    AGENTTRACE_INSECURE_PROTO=1 disables curl's --proto '=https' so we
   //    can pull from http://localhost. Customers never set this.
   // Wipe any prior sandbox install so we exercise the fresh-install path.
   if (existsSync(args.installDir)) {
@@ -207,9 +207,9 @@ async function main(): Promise<void> {
   console.log("━━━━━━━━━━━━━━━━━━━━ install.sh output ━━━━━━━━━━━━━━━━━━━━");
   const installEnv = {
     ...process.env,
-    RAINDROP_INSECURE_PROTO: "1",
-    RAINDROP_INSTALL_DIR: args.installDir,
-    RAINDROP_MANIFEST_URL: `${baseUrl}/latest.json`,
+    AGENTTRACE_INSECURE_PROTO: "1",
+    AGENTTRACE_INSTALL_DIR: args.installDir,
+    AGENTTRACE_MANIFEST_URL: `${baseUrl}/latest.json`,
   };
   // Match the customer experience: pipe install.sh from curl to bash.
   // We do it in-process via spawn to keep stdio clean and to capture exit code.
@@ -222,7 +222,7 @@ async function main(): Promise<void> {
       "bash",
       [
         "-c",
-        `curl -fsSL "${baseUrl}/install.sh" | RAINDROP_INSECURE_PROTO=1 RAINDROP_SKIP_SETUP=1 RAINDROP_INSTALL_DIR="${args.installDir}" RAINDROP_MANIFEST_URL="${baseUrl}/latest.json" bash -s -- --channel=${args.channel}`,
+        `curl -fsSL "${baseUrl}/install.sh" | AGENTTRACE_INSECURE_PROTO=1 AGENTTRACE_SKIP_SETUP=1 AGENTTRACE_INSTALL_DIR="${args.installDir}" AGENTTRACE_MANIFEST_URL="${baseUrl}/latest.json" bash -s -- --channel=${args.channel}`,
       ],
       { stdio: "inherit", env: installEnv },
     );
@@ -249,8 +249,8 @@ async function main(): Promise<void> {
     console.log(`[install-local] smoke test on :${args.port} (start/status/stop)`);
     const env = {
       ...process.env,
-      RAINDROP_WORKSHOP_PORT: String(args.port),
-      RAINDROP_WORKSHOP_DB_PATH: "/tmp/raindrop-local-smoke.db",
+      AGENTTRACE_WORKSHOP_PORT: String(args.port),
+      AGENTTRACE_WORKSHOP_DB_PATH: "/tmp/raindrop-local-smoke.db",
     };
     const startResult = spawnSync(
       installedBinary,

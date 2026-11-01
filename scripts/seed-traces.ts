@@ -6,7 +6,7 @@
  *
  * Usage:
  *   bun run seed:traces                               # POSTs to http://localhost:5899
- *   RAINDROP_WORKSHOP_URL=http://localhost:5998 bun run seed:traces
+ *   AGENTTRACE_WORKSHOP_URL=http://localhost:5998 bun run seed:traces
  *
  * The fixtures are also exported so tests can import them directly instead of
  * going through HTTP.
@@ -19,10 +19,10 @@ type Attr = { key: string; value: AttrValue };
 const str = (key: string, v: string): Attr => ({ key, value: { stringValue: v } });
 const int = (key: string, v: number): Attr => ({ key, value: { intValue: String(v) } });
 
-// `RAINDROP_SEED_SALT` lets the smoke runner generate distinct trace IDs
+// `AGENTTRACE_SEED_SALT` lets the smoke runner generate distinct trace IDs
 // across consecutive seeds against the same DB. Default 0 keeps the legacy
 // 0..0001 / 0..0002 / 0..0003 IDs that snapshot tests pin against.
-const SALT = Number(process.env.RAINDROP_SEED_SALT ?? 0) || 0;
+const SALT = Number(process.env.AGENTTRACE_SEED_SALT ?? 0) || 0;
 const traceId = (n: number) => (n + SALT).toString(16).padStart(32, "0");
 const spanId = (trace: number, slot: number) =>
   `${(trace + SALT).toString(16).padStart(8, "0")}${slot.toString(16).padStart(8, "0")}`;
@@ -743,7 +743,7 @@ const FIXTURES = [
 
 
 async function main() {
-  const url = process.env.RAINDROP_WORKSHOP_URL ?? "http://localhost:5899";
+  const url = process.env.AGENTTRACE_WORKSHOP_URL ?? "http://localhost:5899";
   console.log(`→ seeding ${FIXTURES.length} traces to ${url}`);
   for (const make of FIXTURES) {
     const fx = make();

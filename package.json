@@ -31,7 +31,7 @@
     "build:bun:linux": "bun scripts/build-bun.ts --target=bun-linux-x64",
     "build:bun:windows": "bun scripts/build-bun.ts --target=bun-windows-x64",
     "build:bun:stage": "bun scripts/build-bun.ts --target=bun-linux-x64 && mv build/bun/raindrop-bun-linux-x64 binaries/raindrop-linux-x64 && bun scripts/build-bun.ts --target=bun-windows-x64 && mv build/bun/raindrop-bun-windows-x64.exe binaries/raindrop-windows-x64.exe",
-    "dev": "bun run link-dev && bun --watch src/index.ts workshop serve & (printf \"\\nVite UI: http://localhost:${RAINDROP_WORKSHOP_UI_PORT:-5900}\\n\\n\" && cd app && bun x vite --force) & wait",
+    "dev": "bun run link-dev && bun --watch src/index.ts workshop serve & (printf \"\\nVite UI: http://localhost:${AGENTTRACE_WORKSHOP_UI_PORT:-5900}\\n\\n\" && cd app && bun x vite --force) & wait",
     "link-dev": "ln -sf ../bin/raindrop-dev node_modules/.bin/raindrop-dev",
     "postinstall": "bun run link-dev",
     "dev:server": "bun --watch src/index.ts workshop serve",

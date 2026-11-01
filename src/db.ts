@@ -14,7 +14,7 @@ import { embeddedMigrationFiles, embeddedMigrationJournal } from "./db/migration
 import { VERSION } from "./version";
 import { buildSpanContentText, sanitizeFtsQuery, escapeSnippetHtml } from "./fts";
 
-const WORKSHOP_DB_PATH_ENV_VAR = "RAINDROP_WORKSHOP_DB_PATH";
+const WORKSHOP_DB_PATH_ENV_VAR = "AGENTTRACE_WORKSHOP_DB_PATH";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 

@@ -185,9 +185,9 @@ function textResult(body: unknown) {
 }
 
 function currentAnnotationSource(): AgentAnnotationSource {
-  const explicit = process.env.RAINDROP_WORKSHOP_ANNOTATION_SOURCE;
+  const explicit = process.env.AGENTTRACE_WORKSHOP_ANNOTATION_SOURCE;
   if (explicit === "opencode") return explicit;
-  return agentAnnotationSource(parseAgentProvider(process.env.RAINDROP_WORKSHOP_AGENT_PROVIDER) ?? getAgentProvider());
+  return agentAnnotationSource(parseAgentProvider(process.env.AGENTTRACE_WORKSHOP_AGENT_PROVIDER) ?? getAgentProvider());
 }
 
 function runForMcp(value: unknown): unknown {

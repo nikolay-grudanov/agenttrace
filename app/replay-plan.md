@@ -35,7 +35,7 @@ sequenceDiagram
   Server-->>Workshop: eventName, port, cwd, command, input, prefillFromTrace
   Workshop->>Workshop: prefill editable context from prefillFromTrace
   Workshop->>Server: POST /replay
-  Server->>Workshop: traces via RAINDROP_LOCAL_DEBUGGER
+  Server->>Workshop: traces via AGENTTRACE_LOCAL_DEBUGGER
 ```
 
 
@@ -169,7 +169,7 @@ The server returns immediately:
 Then it runs the agent asynchronously with local tracing enabled:
 
 ```typescript
-process.env.RAINDROP_LOCAL_DEBUGGER = "http://localhost:5899/v1/";
+process.env.AGENTTRACE_LOCAL_DEBUGGER = "http://localhost:5899/v1/";
 ```
 
 For trace stitching, the generated replay server must pass `replayRunId` through the SDK's supported metadata surface:
@@ -304,7 +304,7 @@ The fixture server should:
 - Listen on a fixed port in `61020-61044`.
 - Return `eventName`, `port`, `cwd`, `command`, `input`, `prefillFromTrace`, and `models` from `/health`.
 - Accept `POST /replay`.
-- Emit a simple Raindrop trace to Workshop using `RAINDROP_LOCAL_DEBUGGER`.
+- Emit a simple Raindrop trace to Workshop using `AGENTTRACE_LOCAL_DEBUGGER`.
 - Set SDK metadata `eventId` to the replay request's `replayRunId`, or set `properties.replayRunId` if that SDK cannot set event ids.
 
 This fixture becomes the main automated E2E target.

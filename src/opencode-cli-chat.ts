@@ -161,7 +161,7 @@ export function buildOpencodeArgs(input: AgentCliChatInput): string[] {
   const args = ["run", "--format", "json"];
   // Pin the built-in agent: a project's `default_agent` may reference an agent
   // that no longer exists, which fails every run in that workspace.
-  args.push("--agent", process.env.RAINDROP_WORKSHOP_OPENCODE_AGENT ?? "build");
+  args.push("--agent", process.env.AGENTTRACE_WORKSHOP_OPENCODE_AGENT ?? "build");
   if (input.resumeSessionId) {
     args.push("--session", input.resumeSessionId);
   } else {
@@ -173,7 +173,7 @@ export function buildOpencodeArgs(input: AgentCliChatInput): string[] {
 
 /**
  * Workshop sidepanel sentinel env vars. When the plugin sees
- * `RAINDROP_SIDEPANEL_ACTIVE=1`, it registers the `workshop` stdio MCP server
+ * `AGENTTRACE_SIDEPANEL_ACTIVE=1`, it registers the `workshop` stdio MCP server
  * via its `config` hook and prepends a sidepanel system prompt via
  * `experimental.chat.system.transform`. Without these the agent has no MCP
  * tools for `get_current_run` / `query_traces` / `get_span_payload` and no
@@ -191,12 +191,12 @@ export function opencodeChildEnv(
     PWD: cwd,
     // Let the opencode-workshop plugin stream each sidepanel turn into the
     // local Workshop daemon as an inspectable run.
-    RAINDROP_LOCAL_WORKSHOP_URL: backendUrl,
+    AGENTTRACE_LOCAL_WORKSHOP_URL: backendUrl,
     // Sidepanel bootstrap (F-006): gate the plugin's MCP + system-prompt
     // hook injections on this flag, and pass the focused run_id so the
     // injected system prompt can reference it.
-    RAINDROP_SIDEPANEL_ACTIVE: "1",
-    RAINDROP_SIDEPANEL_RUN_ID: opts.runId ?? "",
+    AGENTTRACE_SIDEPANEL_ACTIVE: "1",
+    AGENTTRACE_SIDEPANEL_RUN_ID: opts.runId ?? "",
     // The plugin writes a per-run OPENCODE_CONFIG_DIR to expose its MCP
     // registration (it can only mutate its own process.env, not the env the
     // child opencode run will execve with). Re-export the path here so the
@@ -204,8 +204,8 @@ export function opencodeChildEnv(
     OPENCODE_CONFIG_DIR: opts.sidepanelConfigDir ?? "",
     // Provider attribution so the workshop mcp stdio server knows which agent
     // produced annotations / traces.
-    RAINDROP_WORKSHOP_AGENT_PROVIDER: "opencode",
-    RAINDROP_WORKSHOP_ANNOTATION_SOURCE: "opencode",
+    AGENTTRACE_WORKSHOP_AGENT_PROVIDER: "opencode",
+    AGENTTRACE_WORKSHOP_ANNOTATION_SOURCE: "opencode",
   };
 }
 
@@ -285,9 +285,9 @@ export function writeSidepanelConfigDir(input: AgentCliChatInput): string | null
           command,
           enabled: true,
           environment: {
-            RAINDROP_WORKSHOP_URL: url,
-            RAINDROP_WORKSHOP_AGENT_PROVIDER: "opencode",
-            RAINDROP_WORKSHOP_ANNOTATION_SOURCE: "opencode",
+            AGENTTRACE_WORKSHOP_URL: url,
+            AGENTTRACE_WORKSHOP_AGENT_PROVIDER: "opencode",
+            AGENTTRACE_WORKSHOP_ANNOTATION_SOURCE: "opencode",
           },
         },
       },
@@ -303,7 +303,7 @@ export function runOpencodeCliChat(
   input: AgentCliChatInput,
   handlers: AgentCliChatHandlers,
 ): Promise<AgentCliChatResult> {
-  const bin = process.env.RAINDROP_WORKSHOP_OPENCODE_BIN ?? "opencode";
+  const bin = process.env.AGENTTRACE_WORKSHOP_OPENCODE_BIN ?? "opencode";
   if (!isWorkshopPluginInstalled(input.cwd)) {
     const message =
       "Workshop sidepanel requires the opencode-workshop-plugin to be installed in this project. " +

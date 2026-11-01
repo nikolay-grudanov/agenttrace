@@ -17,7 +17,7 @@
  *   raindrop uninstall [flags]       remove raindrop integrations + binary
  *   raindrop replay register         register current project replay config
  *   raindrop workshop                start daemon + open UI (idempotent)
- *   raindrop workshop setup          write RAINDROP_LOCAL_DEBUGGER to ./.env, then start+open
+ *   raindrop workshop setup          write AGENTTRACE_LOCAL_DEBUGGER to ./.env, then start+open
  *   raindrop workshop start          start daemon in background
  *   raindrop workshop stop           stop daemon
  *   raindrop workshop reset          delete local Workshop DB after confirmation
@@ -54,8 +54,8 @@ const PORT_PATH = path.join(STATE_DIR, "raindrop_workshop.port");
 const LOG_PATH = path.join(STATE_DIR, "raindrop_workshop.log");
 const DEFAULT_PORT = 5899;
 const MAX_PORT = 65535;
-const PORT_ENV = "RAINDROP_WORKSHOP_PORT";
-const BIND_HOST_ENV = "RAINDROP_WORKSHOP_BIND_HOST";
+const PORT_ENV = "AGENTTRACE_WORKSHOP_PORT";
+const BIND_HOST_ENV = "AGENTTRACE_WORKSHOP_BIND_HOST";
 const DEFAULT_BIND_HOST = WORKSHOP_BIND_HOST;
 
 function getConfiguredBindHost(): string {
@@ -70,7 +70,7 @@ function printWorkshopAccess(port: number, opts: { pid?: number | null; logs?: b
   if (opts.logs) console.log("\x1b[2mLogs: " + LOG_PATH + "\x1b[0m");
   console.log("");
   console.log("env");
-  console.log("  \x1b[2mRAINDROP_LOCAL_DEBUGGER=http://localhost:" + port + "/v1/\x1b[0m");
+  console.log("  \x1b[2mAGENTTRACE_LOCAL_DEBUGGER=http://localhost:" + port + "/v1/\x1b[0m");
   console.log("");
 }
 
@@ -108,10 +108,10 @@ async function runMcp(): Promise<void> {
   // "Failed to reconnect"). Auto-start the daemon so the plugin is robust to
   // machine restarts. All progress goes to stderr — stdout is reserved for
   // JSON-RPC frames.
-  if (!process.env.RAINDROP_WORKSHOP_URL) {
+  if (!process.env.AGENTTRACE_WORKSHOP_URL) {
     try {
       const result = await ensureDaemonRunning();
-      process.env.RAINDROP_WORKSHOP_URL = `http://localhost:${result.port}`;
+      process.env.AGENTTRACE_WORKSHOP_URL = `http://localhost:${result.port}`;
       if (!result.alreadyRunning) {
         console.error(
           `[raindrop workshop mcp] auto-started daemon on :${result.port}` +
@@ -371,7 +371,7 @@ async function cmdWorkshopDefault(): Promise<number> {
   try {
     const result = await ensureDaemonRunning();
     port = result.port;
-    if (!process.env.RAINDROP_SKIP_WORKSPACE_ACTIVATE) {
+    if (!process.env.AGENTTRACE_SKIP_WORKSPACE_ACTIVATE) {
       try {
         await activateWorkspace(port, process.cwd());
       } catch (err) {
@@ -393,7 +393,7 @@ async function cmdWorkshopDefault(): Promise<number> {
  * `raindrop workshop setup` — bootstrap the current project to ship traces to
  * the local debugger. Three jobs, in order:
  *
- *   1. Write `RAINDROP_LOCAL_DEBUGGER=http://localhost:<port>/v1/` into
+ *   1. Write `AGENTTRACE_LOCAL_DEBUGGER=http://localhost:<port>/v1/` into
  *      ./.env (idempotent; won't clobber a different existing value unless
  *      `--force` is given).
  *   2. Start the daemon (or no-op if already running).
@@ -420,14 +420,14 @@ USAGE
     raindrop workshop setup [--file=PATH] [--force] [--print]
 
 WHAT IT DOES
-    1. Writes RAINDROP_LOCAL_DEBUGGER=http://localhost:<port>/v1/ into ./.env
+    1. Writes AGENTTRACE_LOCAL_DEBUGGER=http://localhost:<port>/v1/ into ./.env
        (or --file=PATH). Idempotent — same line already present is a no-op.
     2. Starts the daemon if not already running.
     3. Opens the UI in the browser.
 
 FLAGS
     --file=PATH   Target env file (default: ./.env in current directory).
-    --force       Replace an existing RAINDROP_LOCAL_DEBUGGER line that
+    --force       Replace an existing AGENTTRACE_LOCAL_DEBUGGER line that
                   points elsewhere. Without this, setup bails on a conflict.
     --print       Don't modify any file; just print the export line and
                   skip start/open. Useful for shells that don't read .env.
@@ -447,7 +447,7 @@ FLAGS
     return 1;
   }
   const port = selection.port;
-  const targetLine = `RAINDROP_LOCAL_DEBUGGER=http://localhost:${port}/v1/`;
+  const targetLine = `AGENTTRACE_LOCAL_DEBUGGER=http://localhost:${port}/v1/`;
 
   if (printOnly) {
     console.log(targetLine);
@@ -458,7 +458,7 @@ FLAGS
   const writeResult = writeEnvLine(target, targetLine, { force });
   if (writeResult.kind === "conflict") {
     console.error(
-      `[setup] ${target} has a different RAINDROP_LOCAL_DEBUGGER value:\n` +
+      `[setup] ${target} has a different AGENTTRACE_LOCAL_DEBUGGER value:\n` +
         `  existing: ${writeResult.existing}\n` +
         `  proposed: ${targetLine}\n` +
         `re-run with --force to overwrite, or edit the file manually.`
@@ -466,7 +466,7 @@ FLAGS
     return 2;
   }
   if (writeResult.kind === "noop") {
-    console.log(`[setup] ${target} already has RAINDROP_LOCAL_DEBUGGER — nothing to write`);
+    console.log(`[setup] ${target} already has AGENTTRACE_LOCAL_DEBUGGER — nothing to write`);
   } else {
     console.log(`[setup] wrote ${targetLine} to ${target}`);
   }
@@ -737,18 +737,18 @@ OPTIONS
     -v, --version Print version.
 
 ENVIRONMENT
-    RAINDROP_WORKSHOP_PORT        Exact HTTP port. Without it, Workshop starts
+    AGENTTRACE_WORKSHOP_PORT        Exact HTTP port. Without it, Workshop starts
                                   at ${port} and skips occupied ports upward.
-    RAINDROP_WORKSHOP_DB_PATH     SQLite path
+    AGENTTRACE_WORKSHOP_DB_PATH     SQLite path
                                   (default: ~/.raindrop/raindrop_workshop.db).
-    RAINDROP_WORKSHOP_BIND_HOST   Interface to bind (default: 127.0.0.1). Set to
+    AGENTTRACE_WORKSHOP_BIND_HOST   Interface to bind (default: 127.0.0.1). Set to
                                   0.0.0.0 to accept connections from containers.
-    RAINDROP_WORKSHOP_ALLOWED_HOSTS
+    AGENTTRACE_WORKSHOP_ALLOWED_HOSTS
                                   Comma-separated extra Host header hostnames to
                                   accept, e.g. host.docker.internal. Also lets
                                   local-network sources (Docker bridge) reach the
                                   daemon. Loopback-only unless set.
-    RAINDROP_MANIFEST_URL         Override update manifest URL (advanced).
+    AGENTTRACE_MANIFEST_URL         Override update manifest URL (advanced).
 
 DOCS
     https://github.com/raindrop-ai/workshop`);

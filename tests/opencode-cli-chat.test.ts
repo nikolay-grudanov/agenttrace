@@ -177,20 +177,20 @@ describe("opencodeChildEnv", () => {
   test("forces PWD to the chat cwd and points the plugin at the daemon", () => {
     const env = opencodeChildEnv("/tmp/demo", "http://localhost:5899");
     expect(env.PWD).toBe("/tmp/demo");
-    expect(env.RAINDROP_LOCAL_WORKSHOP_URL).toBe("http://localhost:5899");
+    expect(env.AGENTTRACE_LOCAL_WORKSHOP_URL).toBe("http://localhost:5899");
   });
 
   test("sidepanel mode is on by default with optional run_id", () => {
     const env = opencodeChildEnv("/tmp/demo", "http://localhost:5899", { runId: "run_abc" });
-    expect(env.RAINDROP_SIDEPANEL_ACTIVE).toBe("1");
-    expect(env.RAINDROP_SIDEPANEL_RUN_ID).toBe("run_abc");
-    expect(env.RAINDROP_WORKSHOP_AGENT_PROVIDER).toBe("opencode");
-    expect(env.RAINDROP_WORKSHOP_ANNOTATION_SOURCE).toBe("opencode");
+    expect(env.AGENTTRACE_SIDEPANEL_ACTIVE).toBe("1");
+    expect(env.AGENTTRACE_SIDEPANEL_RUN_ID).toBe("run_abc");
+    expect(env.AGENTTRACE_WORKSHOP_AGENT_PROVIDER).toBe("opencode");
+    expect(env.AGENTTRACE_WORKSHOP_ANNOTATION_SOURCE).toBe("opencode");
   });
 
   test("sidepanel run_id is empty string when not provided", () => {
     const env = opencodeChildEnv("/tmp/demo", "http://localhost:5899");
-    expect(env.RAINDROP_SIDEPANEL_RUN_ID).toBe("");
+    expect(env.AGENTTRACE_SIDEPANEL_RUN_ID).toBe("");
   });
 });
 
@@ -247,7 +247,7 @@ describe("isWorkshopPluginInstalled", () => {
 
 describe("runOpencodeCliChat (F-006 sidepanel bootstrap)", () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oswp-bridge-"));
-  const savedBin = process.env.RAINDROP_WORKSHOP_OPENCODE_BIN;
+  const savedBin = process.env.AGENTTRACE_WORKSHOP_OPENCODE_BIN;
   const savedHome = process.env.HOME;
   const fakeHome = path.join(tmp, "home");
 
@@ -259,8 +259,8 @@ describe("runOpencodeCliChat (F-006 sidepanel bootstrap)", () => {
   afterEach(() => {
     if (savedHome === undefined) delete process.env.HOME;
     else process.env.HOME = savedHome;
-    if (savedBin === undefined) delete process.env.RAINDROP_WORKSHOP_OPENCODE_BIN;
-    else process.env.RAINDROP_WORKSHOP_OPENCODE_BIN = savedBin;
+    if (savedBin === undefined) delete process.env.AGENTTRACE_WORKSHOP_OPENCODE_BIN;
+    else process.env.AGENTTRACE_WORKSHOP_OPENCODE_BIN = savedBin;
   });
 
   test("returns 1 + friendly error when plugin is not installed", async () => {
@@ -284,7 +284,7 @@ describe("runOpencodeCliChat (F-006 sidepanel bootstrap)", () => {
     }));
     // Force spawn to fail fast with ENOENT by pointing the bridge at a
     // non-existent binary. This proves we passed the plugin-detection gate.
-    process.env.RAINDROP_WORKSHOP_OPENCODE_BIN = "/nonexistent-oswp-test-bin";
+    process.env.AGENTTRACE_WORKSHOP_OPENCODE_BIN = "/nonexistent-oswp-test-bin";
     let rejected = false;
     try {
       await runOpencodeCliChat(input({ cwd }), {
@@ -297,8 +297,8 @@ describe("runOpencodeCliChat (F-006 sidepanel bootstrap)", () => {
       rejected = true;
       expect((err as Error).message.toLowerCase()).toMatch(/enoent|not.found/);
     } finally {
-      if (savedBin === undefined) delete process.env.RAINDROP_WORKSHOP_OPENCODE_BIN;
-      else process.env.RAINDROP_WORKSHOP_OPENCODE_BIN = savedBin;
+      if (savedBin === undefined) delete process.env.AGENTTRACE_WORKSHOP_OPENCODE_BIN;
+      else process.env.AGENTTRACE_WORKSHOP_OPENCODE_BIN = savedBin;
     }
     expect(rejected).toBe(true);
   });
@@ -338,11 +338,11 @@ describe("writeSidepanelConfigDir (F-006)", () => {
     expect(Array.isArray(written.mcp.workshop.command)).toBe(true);
     // workshop MCP must point at our stdio server.
     expect(written.mcp.workshop.command.join(" ")).toContain("workshop mcp");
-    expect(written.mcp.workshop.environment.RAINDROP_WORKSHOP_URL).toBe("http://localhost:5899");
-    expect(written.mcp.workshop.environment.RAINDROP_WORKSHOP_AGENT_PROVIDER).toBe("opencode");
+    expect(written.mcp.workshop.environment.AGENTTRACE_WORKSHOP_URL).toBe("http://localhost:5899");
+    expect(written.mcp.workshop.environment.AGENTTRACE_WORKSHOP_AGENT_PROVIDER).toBe("opencode");
   });
 
-  test("strips /v1/ suffix from RAINDROP_WORKSHOP_URL", () => {
+  test("strips /v1/ suffix from AGENTTRACE_WORKSHOP_URL", () => {
     const cwd = fs.mkdtempSync(path.join(tmp, "strip-v1-"));
     fs.mkdirSync(path.join(cwd, ".opencode"), { recursive: true });
     fs.writeFileSync(path.join(cwd, ".opencode", "opencode.json"), JSON.stringify({
@@ -350,6 +350,6 @@ describe("writeSidepanelConfigDir (F-006)", () => {
     }));
     const dir = writeSidepanelConfigDir(input({ cwd, backendUrl: "http://localhost:5899/v1/" }));
     const written = JSON.parse(fs.readFileSync(path.join(dir!, "opencode.json"), "utf8"));
-    expect(written.mcp.workshop.environment.RAINDROP_WORKSHOP_URL).toBe("http://localhost:5899");
+    expect(written.mcp.workshop.environment.AGENTTRACE_WORKSHOP_URL).toBe("http://localhost:5899");
   });
 });

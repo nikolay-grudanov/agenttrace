@@ -154,13 +154,13 @@ function outputName(target: Target): string {
 /**
  * Resolve the version string we embed into the binary.
  *
- *   - CI sets `RAINDROP_VERSION` from the pushed tag (release.yml `derive` step).
+ *   - CI sets `AGENTTRACE_VERSION` from the pushed tag (release.yml `derive` step).
  *   - Local builds fall back to package.json's `version` plus a `-local` suffix,
  *     so `raindrop --version` is never blank but `raindrop update` can also
  *     refuse to "downgrade" a dev build to a real release.
  */
 function resolveVersion(): string {
-  const fromEnv = process.env.RAINDROP_VERSION;
+  const fromEnv = process.env.AGENTTRACE_VERSION;
   if (fromEnv && fromEnv.length > 0) return fromEnv;
   try {
     const pkg = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8")) as {
@@ -181,7 +181,7 @@ function buildOne(target: Target, version: string): string {
     "--compile",
     "--minify",
     `--target=${target}`,
-    `--define=__RAINDROP_VERSION__="${version}"`,
+    `--define=__AGENTTRACE_VERSION__="${version}"`,
     ENTRY,
     "--outfile",
     outfile,

@@ -15,5 +15,5 @@ declare module "*.svg" {
   export default src;
 }
 
-declare const __RAINDROP_VERSION__: string;
-declare const __RAINDROP_ASSETS_BASE_URL__: string;
+declare const __AGENTTRACE_VERSION__: string;
+declare const __AGENTTRACE_ASSETS_BASE_URL__: string;

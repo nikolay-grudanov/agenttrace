@@ -53,7 +53,7 @@ export interface AgentCliChatResult {
   stderr: string;
 }
 
-export const RAINDROP_MCP_TOOLS = [
+export const AGENTTRACE_MCP_TOOLS = [
   {
     name: "get_current_run",
     description: "resolve the focused Workshop run and selected span",
@@ -99,7 +99,7 @@ export const RAINDROP_MCP_TOOLS = [
 const STATE_PATH = path.join(os.homedir(), ".raindrop", "agent-provider.json");
 
 export function getAgentProvider(): AgentProviderId {
-  const envProvider = parseAgentProvider(process.env.RAINDROP_WORKSHOP_AGENT_PROVIDER);
+  const envProvider = parseAgentProvider(process.env.AGENTTRACE_WORKSHOP_AGENT_PROVIDER);
   if (envProvider) return envProvider;
   try {
     const parsed = JSON.parse(fs.readFileSync(STATE_PATH, "utf8")) as { provider?: unknown };
@@ -121,7 +121,7 @@ export function parseAgentProvider(value: unknown): AgentProviderId | null {
 
 export function defaultAgentLoadout(_provider: AgentProviderId): AgentLoadout {
   return {
-    tools: RAINDROP_MCP_TOOLS.map((tool) => `workshop.${tool.name}`),
+    tools: AGENTTRACE_MCP_TOOLS.map((tool) => `workshop.${tool.name}`),
     mcps: ["workshop"],
     skills: [],
     plugins: [],

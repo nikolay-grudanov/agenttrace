@@ -67,7 +67,7 @@ function hasInteractiveStdin(): boolean {
 }
 
 function openTtyInput(): tty.ReadStream | null {
-  if (process.env.RAINDROP_SETUP_TTY !== "1") return null;
+  if (process.env.AGENTTRACE_SETUP_TTY !== "1") return null;
   try {
     return new tty.ReadStream(fs.openSync("/dev/tty", "r+"));
   } catch {
@@ -111,11 +111,11 @@ function summarizeInstall(): string {
 }
 
 function shouldStartWorkshop(args: ParsedArgs): boolean {
-  return !process.env.RAINDROP_SKIP_WORKSHOP_START && !args.registryFile && !args.bundleRoot;
+  return !process.env.AGENTTRACE_SKIP_WORKSHOP_START && !args.registryFile && !args.bundleRoot;
 }
 
 function shouldConfigureStartup(args: ParsedArgs): boolean {
-  return !process.env.RAINDROP_SKIP_STARTUP && !args.registryFile && !args.bundleRoot;
+  return !process.env.AGENTTRACE_SKIP_STARTUP && !args.registryFile && !args.bundleRoot;
 }
 
 function workshopCommand(args: string[]): WorkshopStartupCommand {
@@ -188,7 +188,7 @@ export async function cmdSetup(argv: string[]): Promise<number> {
   }
 
   // Acquire an interactive input stream once: a real TTY stdin, or /dev/tty
-  // when the installer pipes us through bash (RAINDROP_SETUP_TTY=1).
+  // when the installer pipes us through bash (AGENTTRACE_SETUP_TTY=1).
   const ttyInput = hasInteractiveStdin() ? null : openTtyInput();
   const interactive = hasInteractiveStdin() || Boolean(ttyInput);
 

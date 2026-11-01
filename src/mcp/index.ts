@@ -20,7 +20,7 @@ export interface McpServerHandle {
 }
 
 export async function runMcpServer(opts: RunMcpOptions = {}): Promise<McpServerHandle> {
-  const url = opts.url ?? process.env.RAINDROP_WORKSHOP_URL ?? "http://localhost:5899";
+  const url = opts.url ?? process.env.AGENTTRACE_WORKSHOP_URL ?? "http://localhost:5899";
 
   const mcp = new Server(
     { name: PLUGIN_NAME, version: PLUGIN_VERSION },

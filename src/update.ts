@@ -53,7 +53,7 @@ function parseUpdateArgs(rawArgs: string[]): UpdateArgs {
   const out: UpdateArgs = {
     channel: "stable",
     check: false,
-    manifestUrl: process.env.RAINDROP_MANIFEST_URL ?? DEFAULT_MANIFEST_URL,
+    manifestUrl: process.env.AGENTTRACE_MANIFEST_URL ?? DEFAULT_MANIFEST_URL,
     force: false,
   };
   for (const a of rawArgs) {
@@ -75,7 +75,7 @@ function parseUpdateArgs(rawArgs: string[]): UpdateArgs {
           "    -h, --help              This help.",
           "",
           "ENVIRONMENT",
-          "    RAINDROP_MANIFEST_URL   Override manifest source (advanced).",
+          "    AGENTTRACE_MANIFEST_URL   Override manifest source (advanced).",
         ].join("\n"),
       );
       process.exit(0);
@@ -512,7 +512,7 @@ async function runPostUpdateSync(newBinaryPath: string): Promise<void> {
 }
 
 async function isDaemonRunning(): Promise<boolean> {
-  const port = parseInt(process.env.RAINDROP_WORKSHOP_PORT ?? "5899", 10);
+  const port = parseInt(process.env.AGENTTRACE_WORKSHOP_PORT ?? "5899", 10);
   try {
     const res = await fetch(`http://127.0.0.1:${port}/health`, {
       signal: AbortSignal.timeout(500),

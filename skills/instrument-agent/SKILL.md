@@ -57,7 +57,7 @@ Do a quick read-only pass:
 - For Python, record `python --version`, package version, and the actual `raindrop.analytics` surface before assuming current docs apply.
 - Identify where tools actually execute.
 - Identify package manager and env file convention.
-- Search for existing telemetry: `opentelemetry`, `NodeSDK`, `TracerProvider`, `Sentry.init`, Datadog, Honeycomb, Traceloop, LangSmith, `RAINDROP_*`.
+- Search for existing telemetry: `opentelemetry`, `NodeSDK`, `TracerProvider`, `Sentry.init`, Datadog, Honeycomb, Traceloop, LangSmith, `AGENTTRACE_*`.
 - Check whether Workshop is running: `curl -fsS http://localhost:5899/health`.
 
 Timebox this phase. If discovery is not converging quickly, report what you know and ask the smallest concrete question.
@@ -75,7 +75,7 @@ Goal: prove the local trace path works with the smallest top-level instrumentati
 Make the smallest change:
 
 - Install or update the matching Raindrop SDK/integration to the latest available version using the repo's package manager, then inspect the installed README/types before coding.
-- Point the app at local Workshop, usually with `RAINDROP_LOCAL_DEBUGGER=http://localhost:5899/v1/`.
+- Point the app at local Workshop, usually with `AGENTTRACE_LOCAL_DEBUGGER=http://localhost:5899/v1/`.
 - Add minimal instrumentation to one real entry point: wrapper call metadata, or `begin` before the invocation and `finish` after final output/error.
 - Run one representative invocation.
 - Verify a run appears in Workshop with enough input/output to prove the right code path is connected.
@@ -123,8 +123,8 @@ Use for custom TypeScript/Node agents and direct provider SDK calls. The core sh
 
 ```ts
 const raindrop = new Raindrop({
-  writeKey: process.env.RAINDROP_WRITE_KEY,
-  endpoint: process.env.RAINDROP_ENDPOINT ?? process.env.RAINDROP_LOCAL_DEBUGGER,
+  writeKey: process.env.AGENTTRACE_WRITE_KEY,
+  endpoint: process.env.AGENTTRACE_ENDPOINT ?? process.env.AGENTTRACE_LOCAL_DEBUGGER,
 });
 
 const interaction = raindrop.begin({

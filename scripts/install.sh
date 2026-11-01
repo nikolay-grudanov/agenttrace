@@ -12,9 +12,9 @@
 # install path is forward-compatible with multi-product raindrop tooling.
 #
 # Design notes (mirrors docs/specs/2026-04-29-packaging-design.md):
-#   - Reads the manifest from $RAINDROP_MANIFEST_URL
+#   - Reads the manifest from $AGENTTRACE_MANIFEST_URL
 #     (default: raw.githubusercontent.com/raindrop-ai/workshop/main/latest.json)
-#   - Picks the entry for $RAINDROP_CHANNEL (default stable)
+#   - Picks the entry for $AGENTTRACE_CHANNEL (default stable)
 #   - Downloads the platform-appropriate binary to a temp file
 #   - Verifies sha256 against the manifest
 #   - Atomically renames into ~/.raindrop/bin/raindrop
@@ -31,18 +31,18 @@ set -euo pipefail
 # Default output is a product-shaped installer: a few clear steps, followed by
 # the installed binary's own setup flow. Raw URLs, hashes, and platform keys are kept for
 # --verbose so users can debug without everyone staring at manifest guts.
-RAINDROP_VERBOSE="${RAINDROP_VERBOSE:-0}"
-RAINDROP_QUIET="${RAINDROP_QUIET:-0}"
+AGENTTRACE_VERBOSE="${AGENTTRACE_VERBOSE:-0}"
+AGENTTRACE_QUIET="${AGENTTRACE_QUIET:-0}"
 if [ -n "${NO_COLOR:-}" ]; then
-  RAINDROP_NO_COLOR="${RAINDROP_NO_COLOR:-1}"
+  AGENTTRACE_NO_COLOR="${AGENTTRACE_NO_COLOR:-1}"
 else
-  RAINDROP_NO_COLOR="${RAINDROP_NO_COLOR:-0}"
+  AGENTTRACE_NO_COLOR="${AGENTTRACE_NO_COLOR:-0}"
 fi
 
 C_BLUE=""; C_GREEN=""; C_RED=""; C_DIM=""; C_BOLD=""; C_RESET=""
 
 configure_colors() {
-  if [ "$RAINDROP_NO_COLOR" = "1" ] || [ ! -t 1 ]; then
+  if [ "$AGENTTRACE_NO_COLOR" = "1" ] || [ ! -t 1 ]; then
     C_BLUE=""; C_GREEN=""; C_RED=""; C_DIM=""; C_BOLD=""; C_RESET=""
     return
   fi
@@ -55,7 +55,7 @@ configure_colors() {
 }
 
 log() {
-  if [ "$RAINDROP_VERBOSE" = "1" ] && [ "$RAINDROP_QUIET" != "1" ]; then
+  if [ "$AGENTTRACE_VERBOSE" = "1" ] && [ "$AGENTTRACE_QUIET" != "1" ]; then
     printf '%s%s%s\n' "$C_DIM" "[install] $*" "$C_RESET" >&2
   fi
 }
@@ -63,31 +63,31 @@ log() {
 err() { printf '[install] %s\n' "$*" >&2; }
 
 print_intro() {
-  if [ "$RAINDROP_QUIET" = "1" ]; then return; fi
+  if [ "$AGENTTRACE_QUIET" = "1" ]; then return; fi
   echo ""
   printf '%s◆%s %sInstalling Raindrop%s\n' "$C_BLUE" "$C_RESET" "$C_BOLD" "$C_RESET"
   echo ""
 }
 
 step_start() {
-  if [ "$RAINDROP_QUIET" = "1" ]; then return; fi
+  if [ "$AGENTTRACE_QUIET" = "1" ]; then return; fi
   printf '%s◇%s %s\n\n' "$C_BLUE" "$C_RESET" "$1"
 }
 
 step_done() {
-  if [ "$RAINDROP_QUIET" = "1" ]; then return; fi
+  if [ "$AGENTTRACE_QUIET" = "1" ]; then return; fi
   printf '%s✓%s %s\n' "$C_GREEN" "$C_RESET" "$1"
   echo ""
 }
 
 step_fail() {
-  if [ "$RAINDROP_QUIET" = "1" ]; then return; fi
+  if [ "$AGENTTRACE_QUIET" = "1" ]; then return; fi
   printf '%s✕%s %s\n' "$C_RED" "$C_RESET" "$1"
   echo ""
 }
 
 note() {
-  if [ "$RAINDROP_QUIET" = "1" ]; then return; fi
+  if [ "$AGENTTRACE_QUIET" = "1" ]; then return; fi
   printf '%s%s%s\n' "$C_DIM" "$1" "$C_RESET"
 }
 
@@ -96,12 +96,12 @@ run_with_spinner() {
   local success="$2"
   shift 2
 
-  if [ "$RAINDROP_QUIET" = "1" ]; then
+  if [ "$AGENTTRACE_QUIET" = "1" ]; then
     "$@"
     return $?
   fi
 
-  if [ "$RAINDROP_VERBOSE" != "1" ]; then
+  if [ "$AGENTTRACE_VERBOSE" != "1" ]; then
     local frames=( "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏" )
     local i=0
     "$@" &
@@ -142,12 +142,12 @@ run_dynamic_spinner() {
   local success_fn="$2"
   shift 2
 
-  if [ "$RAINDROP_QUIET" = "1" ]; then
+  if [ "$AGENTTRACE_QUIET" = "1" ]; then
     "$@"
     return $?
   fi
 
-  if [ "$RAINDROP_VERBOSE" != "1" ]; then
+  if [ "$AGENTTRACE_VERBOSE" != "1" ]; then
     if [ -t 1 ]; then
       printf '\r%s⠋%s %s' "$C_BLUE" "$C_RESET" "$label"
     else
@@ -234,12 +234,12 @@ run_download_progress() {
   local out="$4"
   local total="$5"
 
-  if [ "$RAINDROP_QUIET" = "1" ]; then
+  if [ "$AGENTTRACE_QUIET" = "1" ]; then
     fetch "$url" "$out"
     return $?
   fi
 
-  if [ "$RAINDROP_VERBOSE" = "1" ] || [ ! -t 1 ] || ! is_uint "$total" || [ "$((10#$total))" -le 0 ]; then
+  if [ "$AGENTTRACE_VERBOSE" = "1" ] || [ ! -t 1 ] || ! is_uint "$total" || [ "$((10#$total))" -le 0 ]; then
     run_with_spinner "$label" "$success" fetch "$url" "$out"
     return $?
   fi
@@ -270,18 +270,18 @@ run_download_progress() {
   return "$status"
 }
 
-# RAINDROP_SKIP_SETUP / --no-setup skip the automatic IDE setup command after
+# AGENTTRACE_SKIP_SETUP / --no-setup skip the automatic IDE setup command after
 # download. This is mainly for local installer smoke tests and scripted binary
 # installs that only want the executable on disk. Accept the older init name
 # too so existing scripted installs do not suddenly start touching IDE config.
-RAINDROP_NO_SETUP="${RAINDROP_SKIP_SETUP:-${RAINDROP_SKIP_INIT:-0}}"
+AGENTTRACE_NO_SETUP="${AGENTTRACE_SKIP_SETUP:-${AGENTTRACE_SKIP_INIT:-0}}"
 
 # Install "mode" — derives intent from WHERE the user copied the command:
 #   workshop site one-liner  -> default: `raindrop setup` (local debugger + daemon)
 #   onboarding one-liner     -> --cloud: `raindrop cloud setup` (hosted MCP +
 #                               cloud skills, write key in ./.env, NO daemon)
 # Same binary, same installer; only the post-install command differs.
-RAINDROP_CLOUD="${RAINDROP_CLOUD:-0}"
+AGENTTRACE_CLOUD="${AGENTTRACE_CLOUD:-0}"
 
 # Track whether the channel was set explicitly (env var or --channel flag).
 # If the user took the default and it turns out the manifest has no entry
@@ -289,44 +289,44 @@ RAINDROP_CLOUD="${RAINDROP_CLOUD:-0}"
 # fall back to beta with a clear message instead of failing dead. Explicit
 # requests still fail loud — if a customer asked for stable and we don't
 # have one, that's a real signal, not something to paper over.
-if [ -n "${RAINDROP_CHANNEL+x}" ]; then
-  RAINDROP_CHANNEL_EXPLICIT=1
+if [ -n "${AGENTTRACE_CHANNEL+x}" ]; then
+  AGENTTRACE_CHANNEL_EXPLICIT=1
 else
-  RAINDROP_CHANNEL_EXPLICIT=0
+  AGENTTRACE_CHANNEL_EXPLICIT=0
 fi
-RAINDROP_CHANNEL="${RAINDROP_CHANNEL:-stable}"
+AGENTTRACE_CHANNEL="${AGENTTRACE_CHANNEL:-stable}"
 # Manifest URL: served from main of the releases repo via raw.githubusercontent.
 # release.yml commits a fresh latest.json there on every release, so this URL
 # always works regardless of channel/prerelease semantics.
-RAINDROP_MANIFEST_URL="${RAINDROP_MANIFEST_URL:-https://raw.githubusercontent.com/raindrop-ai/workshop/main/latest.json}"
-RAINDROP_INSTALL_DIR="${RAINDROP_INSTALL_DIR:-$HOME/.raindrop/bin}"
+AGENTTRACE_MANIFEST_URL="${AGENTTRACE_MANIFEST_URL:-https://raw.githubusercontent.com/raindrop-ai/workshop/main/latest.json}"
+AGENTTRACE_INSTALL_DIR="${AGENTTRACE_INSTALL_DIR:-$HOME/.raindrop/bin}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --channel=*) RAINDROP_CHANNEL="${1#*=}"; RAINDROP_CHANNEL_EXPLICIT=1 ;;
-    --channel) shift; RAINDROP_CHANNEL="$1"; RAINDROP_CHANNEL_EXPLICIT=1 ;;
-    --manifest=*) RAINDROP_MANIFEST_URL="${1#*=}" ;;
-    --manifest) shift; RAINDROP_MANIFEST_URL="$1" ;;
-    --install-dir=*) RAINDROP_INSTALL_DIR="${1#*=}" ;;
-    --install-dir) shift; RAINDROP_INSTALL_DIR="$1" ;;
-    --verbose) RAINDROP_VERBOSE=1 ;;
-    --quiet) RAINDROP_QUIET=1 ;;
-    --no-color) RAINDROP_NO_COLOR=1 ;;
-    --no-setup|--no-init) RAINDROP_NO_SETUP=1 ;;
-    --cloud) RAINDROP_CLOUD=1 ;;
+    --channel=*) AGENTTRACE_CHANNEL="${1#*=}"; AGENTTRACE_CHANNEL_EXPLICIT=1 ;;
+    --channel) shift; AGENTTRACE_CHANNEL="$1"; AGENTTRACE_CHANNEL_EXPLICIT=1 ;;
+    --manifest=*) AGENTTRACE_MANIFEST_URL="${1#*=}" ;;
+    --manifest) shift; AGENTTRACE_MANIFEST_URL="$1" ;;
+    --install-dir=*) AGENTTRACE_INSTALL_DIR="${1#*=}" ;;
+    --install-dir) shift; AGENTTRACE_INSTALL_DIR="$1" ;;
+    --verbose) AGENTTRACE_VERBOSE=1 ;;
+    --quiet) AGENTTRACE_QUIET=1 ;;
+    --no-color) AGENTTRACE_NO_COLOR=1 ;;
+    --no-setup|--no-init) AGENTTRACE_NO_SETUP=1 ;;
+    --cloud) AGENTTRACE_CLOUD=1 ;;
     -h|--help)
       cat <<'USAGE'
 Usage: install.sh [--channel=stable|beta] [--manifest=URL] [--install-dir=DIR] [--cloud] [--verbose] [--quiet] [--no-color] [--no-setup]
 
 Environment overrides:
-  RAINDROP_CHANNEL         stable | beta            (default: stable)
-  RAINDROP_MANIFEST_URL    URL of latest.json
+  AGENTTRACE_CHANNEL         stable | beta            (default: stable)
+  AGENTTRACE_MANIFEST_URL    URL of latest.json
                            (default: https://raw.githubusercontent.com/raindrop-ai/workshop/main/latest.json)
-  RAINDROP_INSTALL_DIR     install dir              (default: ~/.raindrop/bin)
-  RAINDROP_SKIP_SETUP      1 to skip automatic setup
-  RAINDROP_CLOUD           1 to run `raindrop cloud setup` instead of `setup`
-  RAINDROP_VERBOSE         1 to print URLs, hashes, and platform details
-  RAINDROP_QUIET           1 to suppress success output
+  AGENTTRACE_INSTALL_DIR     install dir              (default: ~/.raindrop/bin)
+  AGENTTRACE_SKIP_SETUP      1 to skip automatic setup
+  AGENTTRACE_CLOUD           1 to run `raindrop cloud setup` instead of `setup`
+  AGENTTRACE_VERBOSE         1 to print URLs, hashes, and platform details
+  AGENTTRACE_QUIET           1 to suppress success output
   NO_COLOR                 disable ANSI color
 
 install.sh downloads, sha256-verifies, installs the `raindrop`
@@ -336,10 +336,10 @@ binary, adds it to PATH for new terminals, then runs `raindrop setup`.
   --quiet suppresses progress and success output, but still prints errors.
   --no-color disables ANSI color.
 
-  --no-setup / RAINDROP_SKIP_SETUP=1 skip automatic `raindrop setup`.
-  --no-init / RAINDROP_SKIP_INIT=1 are accepted as old names for --no-setup.
+  --no-setup / AGENTTRACE_SKIP_SETUP=1 skip automatic `raindrop setup`.
+  --no-init / AGENTTRACE_SKIP_INIT=1 are accepted as old names for --no-setup.
 
-  --cloud / RAINDROP_CLOUD=1 connect this project to Raindrop cloud instead of
+  --cloud / AGENTTRACE_CLOUD=1 connect this project to Raindrop cloud instead of
   the local debugger: runs `raindrop cloud setup` (signs in, writes the write
   key to ./.env, installs the hosted MCP + cloud skills) and does NOT start a
   daemon. Use this for the onboarding one-liner.
@@ -356,8 +356,8 @@ done
 
 configure_colors
 
-if [ "$RAINDROP_CHANNEL" != "stable" ] && [ "$RAINDROP_CHANNEL" != "beta" ]; then
-  echo "Invalid channel: $RAINDROP_CHANNEL (expected stable|beta)" >&2
+if [ "$AGENTTRACE_CHANNEL" != "stable" ] && [ "$AGENTTRACE_CHANNEL" != "beta" ]; then
+  echo "Invalid channel: $AGENTTRACE_CHANNEL (expected stable|beta)" >&2
   exit 2
 fi
 
@@ -398,22 +398,22 @@ platform_success() {
   platform_label "$PLATFORM"
 }
 
-if [ "$RAINDROP_VERBOSE" = "1" ]; then
+if [ "$AGENTTRACE_VERBOSE" = "1" ]; then
   run_dynamic_spinner "Detecting platform" platform_success detect_platform_step
 else
   detect_platform_step
 fi
-log "platform=$PLATFORM channel=$RAINDROP_CHANNEL"
+log "platform=$PLATFORM channel=$AGENTTRACE_CHANNEL"
 
 # Tooling: prefer curl, fall back to wget
 need() { command -v "$1" >/dev/null 2>&1; }
 
 fetch() {
   # fetch <url> <out-path>
-  # Production: hard-pin to https + tls1.2+. Set RAINDROP_INSECURE_PROTO=1 only
+  # Production: hard-pin to https + tls1.2+. Set AGENTTRACE_INSECURE_PROTO=1 only
   # in tests against a local HTTP server.
   if need curl; then
-    if [ "${RAINDROP_INSECURE_PROTO:-0}" = "1" ]; then
+    if [ "${AGENTTRACE_INSECURE_PROTO:-0}" = "1" ]; then
       curl -fsSL -o "$2" "$1"
     else
       curl -fsSL --proto '=https' --tlsv1.2 -o "$2" "$1"
@@ -442,17 +442,17 @@ TMP_DIR="$(mktemp -d -t raindrop-install-XXXXXX)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 MANIFEST="$TMP_DIR/manifest.json"
-log "manifest=$RAINDROP_MANIFEST_URL"
-if [ "$RAINDROP_VERBOSE" = "1" ]; then
-  run_with_spinner "Fetching latest $RAINDROP_CHANNEL release" "Release manifest fetched" fetch "$RAINDROP_MANIFEST_URL" "$MANIFEST"
+log "manifest=$AGENTTRACE_MANIFEST_URL"
+if [ "$AGENTTRACE_VERBOSE" = "1" ]; then
+  run_with_spinner "Fetching latest $AGENTTRACE_CHANNEL release" "Release manifest fetched" fetch "$AGENTTRACE_MANIFEST_URL" "$MANIFEST"
 else
-  fetch "$RAINDROP_MANIFEST_URL" "$MANIFEST"
+  fetch "$AGENTTRACE_MANIFEST_URL" "$MANIFEST"
 fi
 
 # Tiny JSON parser via python3 (preinstalled on macOS+most Linux).
 # We parse two strings (url, sha256) and one int (size). No jq dep.
 parse_field() {
-  python3 - "$MANIFEST" "$RAINDROP_CHANNEL" "$PLATFORM" "$1" <<'PY'
+  python3 - "$MANIFEST" "$AGENTTRACE_CHANNEL" "$PLATFORM" "$1" <<'PY'
 import json, sys
 manifest_path, channel, platform, field = sys.argv[1:5]
 m = json.load(open(manifest_path))
@@ -469,7 +469,7 @@ PY
 }
 
 read_version() {
-  python3 - "$MANIFEST" "$RAINDROP_CHANNEL" <<'PY'
+  python3 - "$MANIFEST" "$AGENTTRACE_CHANNEL" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
 print((m.get(sys.argv[2]) or {}).get("version") or "")
@@ -488,12 +488,12 @@ resolve_release() {
   # Implicit-default fallback: if the user didn't ask for a specific channel
   # and the default (stable) has no entry for this platform, try beta before
   # bailing. Keeps `curl … | bash` working in early-stage projects that ship
-  # only betas. See the RAINDROP_CHANNEL_EXPLICIT comment block above.
+  # only betas. See the AGENTTRACE_CHANNEL_EXPLICIT comment block above.
   if [ -z "$URL" ] || [ -z "$EXPECTED_SHA" ] || [ -z "$EXPECTED_SIZE" ]; then
-    if [ "$RAINDROP_CHANNEL_EXPLICIT" = "0" ] && [ "$RAINDROP_CHANNEL" = "stable" ]; then
+    if [ "$AGENTTRACE_CHANNEL_EXPLICIT" = "0" ] && [ "$AGENTTRACE_CHANNEL" = "stable" ]; then
       note "No stable release is published yet; trying beta."
       log "no stable release published; falling back to beta channel"
-      RAINDROP_CHANNEL=beta
+      AGENTTRACE_CHANNEL=beta
       VERSION="$(read_version)"
       URL="$(parse_field url)"
       EXPECTED_SHA="$(parse_field sha256)"
@@ -505,8 +505,8 @@ resolve_release() {
   fi
 
   if [ -z "$URL" ] || [ -z "$EXPECTED_SHA" ] || [ -z "$EXPECTED_SIZE" ]; then
-    err "manifest missing entry for channel=$RAINDROP_CHANNEL platform=$PLATFORM"
-    if [ "$RAINDROP_VERBOSE" != "1" ]; then
+    err "manifest missing entry for channel=$AGENTTRACE_CHANNEL platform=$PLATFORM"
+    if [ "$AGENTTRACE_VERBOSE" != "1" ]; then
       err "re-run with --verbose to show manifest diagnostics"
     fi
     return 1
@@ -531,10 +531,10 @@ resolve_release() {
 }
 
 release_success() {
-  echo "Raindrop $VERSION ($RAINDROP_CHANNEL)"
+  echo "Raindrop $VERSION ($AGENTTRACE_CHANNEL)"
 }
 
-if [ "$RAINDROP_VERBOSE" = "1" ]; then
+if [ "$AGENTTRACE_VERBOSE" = "1" ]; then
   run_dynamic_spinner "Resolving release" release_success resolve_release
 else
   resolve_release
@@ -600,20 +600,20 @@ checksum_success() {
   echo "Checksum verified"
 }
 
-if [ "$RAINDROP_VERBOSE" = "1" ]; then
+if [ "$AGENTTRACE_VERBOSE" = "1" ]; then
   run_dynamic_spinner "Verifying download" checksum_success verify_download
 else
   verify_download
 fi
 
 # Install atomically
-DEST="$RAINDROP_INSTALL_DIR/raindrop"
+DEST="$AGENTTRACE_INSTALL_DIR/raindrop"
 if [ "$PLATFORM" = "windows-x64" ]; then
   DEST="${DEST}.exe"
 fi
 
 install_binary() {
-  mkdir -p "$RAINDROP_INSTALL_DIR"
+  mkdir -p "$AGENTTRACE_INSTALL_DIR"
   chmod +x "$DOWNLOAD"
 
   # Atomic rename. If a previous binary exists, keep it as raindrop.prev for rollback.
@@ -632,9 +632,9 @@ log "installed: $DEST"
 # already-open parent shell. We do the durable part here for future terminals.
 
 path_literal_for_rc() {
-  case "$RAINDROP_INSTALL_DIR" in
-    "$HOME"/*) printf '$HOME/%s' "${RAINDROP_INSTALL_DIR#$HOME/}" ;;
-    *)         printf '%s' "$RAINDROP_INSTALL_DIR" ;;
+  case "$AGENTTRACE_INSTALL_DIR" in
+    "$HOME"/*) printf '$HOME/%s' "${AGENTTRACE_INSTALL_DIR#$HOME/}" ;;
+    *)         printf '%s' "$AGENTTRACE_INSTALL_DIR" ;;
   esac
 }
 
@@ -643,7 +643,7 @@ file_mentions_install_dir() {
   local literal="$2"
   [ -f "$file" ] || return 1
   case "$(cat "$file")" in
-    *"$RAINDROP_INSTALL_DIR"*|*"$literal"*) return 0 ;;
+    *"$AGENTTRACE_INSTALL_DIR"*|*"$literal"*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -701,31 +701,31 @@ path_success() {
   echo "PATH configured"
 }
 
-if [ "$RAINDROP_VERBOSE" = "1" ]; then
+if [ "$AGENTTRACE_VERBOSE" = "1" ]; then
   run_dynamic_spinner "Configuring PATH" path_success configure_path
 else
   configure_path
 fi
 
 case ":$PATH:" in
-  *":$RAINDROP_INSTALL_DIR:"*) ;;
-  *) export PATH="$RAINDROP_INSTALL_DIR:$PATH" ;;
+  *":$AGENTTRACE_INSTALL_DIR:"*) ;;
+  *) export PATH="$AGENTTRACE_INSTALL_DIR:$PATH" ;;
 esac
 
 # IDE setup
 run_agent_setup() {
-  if [ "$RAINDROP_NO_SETUP" = "1" ]; then
-    log "skipping automatic raindrop setup because RAINDROP_SKIP_SETUP=1 or --no-setup was set"
+  if [ "$AGENTTRACE_NO_SETUP" = "1" ]; then
+    log "skipping automatic raindrop setup because AGENTTRACE_SKIP_SETUP=1 or --no-setup was set"
     return 0
   fi
 
-  if [ "$RAINDROP_QUIET" != "1" ]; then
+  if [ "$AGENTTRACE_QUIET" != "1" ]; then
     echo ""
   fi
   # Derive the post-install command from the install mode. Cloud mode connects
   # to Raindrop cloud (no daemon); default mode is the local debugger setup.
   local -a setup_cmd
-  if [ "$RAINDROP_CLOUD" = "1" ]; then
+  if [ "$AGENTTRACE_CLOUD" = "1" ]; then
     setup_cmd=(cloud setup)
   else
     setup_cmd=(setup)
@@ -734,7 +734,7 @@ run_agent_setup() {
   if [ -t 0 ]; then
     "$DEST" "${setup_cmd[@]}"
   elif [ -r /dev/tty ] && [ -t 1 ]; then
-    RAINDROP_SETUP_TTY=1 "$DEST" "${setup_cmd[@]}"
+    AGENTTRACE_SETUP_TTY=1 "$DEST" "${setup_cmd[@]}"
   else
     "$DEST" "${setup_cmd[@]}"
   fi

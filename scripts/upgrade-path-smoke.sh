@@ -15,9 +15,9 @@ PORT="${PORT:-5990}"
 TMP="$(mktemp -d)"
 DB="$TMP/upgrade.db"
 DAEMON_LOG="$HOME/.raindrop/raindrop_workshop.log"
-export RAINDROP_WORKSHOP_DB_PATH="$DB"
+export AGENTTRACE_WORKSHOP_DB_PATH="$DB"
 export PORT
-export RAINDROP_WORKSHOP_PORT="$PORT"
+export AGENTTRACE_WORKSHOP_PORT="$PORT"
 
 log_size() { [ -f "$DAEMON_LOG" ] && wc -c < "$DAEMON_LOG" | tr -d ' ' || echo 0; }
 log_since() {
@@ -51,7 +51,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "── 1/8 install latest stable raindrop"
-curl -fsSL https://raw.githubusercontent.com/raindrop-ai/workshop/main/install.sh | RAINDROP_QUIET=1 RAINDROP_SKIP_SETUP=1 bash >/dev/null
+curl -fsSL https://raw.githubusercontent.com/raindrop-ai/workshop/main/install.sh | AGENTTRACE_QUIET=1 AGENTTRACE_SKIP_SETUP=1 bash >/dev/null
 OLD_BIN="$HOME/.raindrop/bin/raindrop"
 [ -x "$OLD_BIN" ] || { echo "::error::install.sh did not produce $OLD_BIN"; exit 1; }
 OLD_VER="$("$OLD_BIN" --version 2>&1 | head -1)"
@@ -69,7 +69,7 @@ wait_for_health "$PORT" 60 || {
 }
 
 echo "── 3/8 seed fixtures via OTLP"
-RAINDROP_WORKSHOP_URL="http://localhost:$PORT" bun "$REPO_ROOT/scripts/seed-traces.ts"
+AGENTTRACE_WORKSHOP_URL="http://localhost:$PORT" bun "$REPO_ROOT/scripts/seed-traces.ts"
 
 # Pinned trace ID for fixture 1 (`fixtureSuccessfulEdit`, salt=0). Used below
 # to assert per-row data survives migration, not just aggregate row count —
@@ -207,7 +207,7 @@ echo "── 8/8 seed fresh traces under PR binary, verify writes accepted + no 
 LOG_BEFORE_WRITE="$(log_size)"
 # Salt the trace IDs so the second seed produces distinct rows instead of
 # upserting the originals — the strict-greater check below depends on it.
-RAINDROP_WORKSHOP_URL="http://localhost:$PORT" RAINDROP_SEED_SALT=1000 \
+AGENTTRACE_WORKSHOP_URL="http://localhost:$PORT" AGENTTRACE_SEED_SALT=1000 \
   bun "$REPO_ROOT/scripts/seed-traces.ts"
 # Daemon flushes spans + partial events on a short interval; give it room.
 sleep 2

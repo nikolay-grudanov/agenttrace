@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const dbPath = `/tmp/f008-search-${process.pid}.db`;
-process.env.RAINDROP_WORKSHOP_DB_PATH = dbPath;
+process.env.AGENTTRACE_WORKSHOP_DB_PATH = dbPath;
 const { getDrizzleDb, insertSpan, searchSpans, closeDb } = await import("../src/db");
 
 // `src/db.ts` caches its SQLite handle in a module-level singleton, and Bun

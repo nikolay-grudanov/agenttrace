@@ -4,7 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { PRESET_PROMPTS, resolvePresetPrompts, type PresetPrompt } from "../app/src/components/presetPrompts";
 
-declare const globalThis: { RAINDROP_PRESET_PROMPTS?: unknown };
+declare const globalThis: { AGENTTRACE_PRESET_PROMPTS?: unknown };
 
 describe("PRESET_PROMPTS", () => {
   test("ships three default chips with stable ids and i18n label keys", () => {
@@ -20,7 +20,7 @@ describe("PRESET_PROMPTS", () => {
 
 describe("resolvePresetPrompts", () => {
   test("returns bundled defaults when no global override is set", () => {
-    delete globalThis.RAINDROP_PRESET_PROMPTS;
+    delete globalThis.AGENTTRACE_PRESET_PROMPTS;
     expect(resolvePresetPrompts()).toBe(PRESET_PROMPTS);
   });
 
@@ -29,31 +29,31 @@ describe("resolvePresetPrompts", () => {
       { id: "explainErrors", labelKey: "chat.preset.explainErrors", prompt: "Explain every error span in this trace." },
       { id: "summarize", labelKey: "chat.preset.summarize", prompt: "Summarize this trace in 3 sentences." },
     ];
-    globalThis.RAINDROP_PRESET_PROMPTS = override;
+    globalThis.AGENTTRACE_PRESET_PROMPTS = override;
     expect(resolvePresetPrompts()).toEqual(override);
-    delete globalThis.RAINDROP_PRESET_PROMPTS;
+    delete globalThis.AGENTTRACE_PRESET_PROMPTS;
   });
 
   test("falls back to defaults when override items are missing required fields", () => {
-    globalThis.RAINDROP_PRESET_PROMPTS = [
+    globalThis.AGENTTRACE_PRESET_PROMPTS = [
       { id: "ok", labelKey: "x", prompt: "y" },
       { id: "missing-label" }, // invalid
       { labelKey: "no-id", prompt: "z" }, // invalid
       { id: "empty-prompt", labelKey: "k", prompt: "" }, // invalid
     ];
     expect(resolvePresetPrompts()).toEqual([{ id: "ok", labelKey: "x", prompt: "y" }]);
-    delete globalThis.RAINDROP_PRESET_PROMPTS;
+    delete globalThis.AGENTTRACE_PRESET_PROMPTS;
   });
 
   test("falls back to bundled defaults when override array is empty", () => {
-    globalThis.RAINDROP_PRESET_PROMPTS = [];
+    globalThis.AGENTTRACE_PRESET_PROMPTS = [];
     expect(resolvePresetPrompts()).toBe(PRESET_PROMPTS);
-    delete globalThis.RAINDROP_PRESET_PROMPTS;
+    delete globalThis.AGENTTRACE_PRESET_PROMPTS;
   });
 
   test("falls back when override is not an array", () => {
-    globalThis.RAINDROP_PRESET_PROMPTS = "not an array";
+    globalThis.AGENTTRACE_PRESET_PROMPTS = "not an array";
     expect(resolvePresetPrompts()).toBe(PRESET_PROMPTS);
-    delete globalThis.RAINDROP_PRESET_PROMPTS;
+    delete globalThis.AGENTTRACE_PRESET_PROMPTS;
   });
 });

@@ -9,12 +9,12 @@
  *   bun run dev:examples
  *
  * What it does:
- *   1. Starts the workshop daemon in-process on $RAINDROP_WORKSHOP_PORT (default 5899).
+ *   1. Starts the workshop daemon in-process on $AGENTTRACE_WORKSHOP_PORT (default 5899).
  *      Workshop UI:     http://localhost:5899
  *      Trace ingest:    http://localhost:5899/v1/traces
  *      MCP (stdio):     bun src/index.ts workshop mcp
  *   2. Spawns every example app under examples/ as a child `bun` process,
- *      each with a stable port and RAINDROP_LOCAL_DEBUGGER pointed at (1).
+ *      each with a stable port and AGENTTRACE_LOCAL_DEBUGGER pointed at (1).
  *   3. Tees each child's stdout/stderr through a colored, prefixed logger so
  *      a single shell tab is enough to follow the whole stack.
  *   4. On Ctrl-C, broadcasts SIGINT to every child and waits for them to exit
@@ -291,7 +291,7 @@ async function pipeWithPrefix(
 }
 
 async function main(): Promise<void> {
-  const debuggerPort = Number(process.env.RAINDROP_WORKSHOP_PORT ?? 5899);
+  const debuggerPort = Number(process.env.AGENTTRACE_WORKSHOP_PORT ?? 5899);
 
   // Before port check: a missing bundle is the slower, fail-fast condition.
   ensureWorkshopUi();
@@ -311,8 +311,8 @@ async function main(): Promise<void> {
 
   // Examples discover the local daemon via these env vars. Don't clobber if
   // the operator already pointed them somewhere else (e.g. a remote endpoint).
-  process.env.RAINDROP_LOCAL_DEBUGGER ??= debuggerIngest;
-  process.env.RAINDROP_ENDPOINT ??= process.env.RAINDROP_LOCAL_DEBUGGER;
+  process.env.AGENTTRACE_LOCAL_DEBUGGER ??= debuggerIngest;
+  process.env.AGENTTRACE_ENDPOINT ??= process.env.AGENTTRACE_LOCAL_DEBUGGER;
 
   const children: RunningChild[] = [];
   const skipped: { app: ExampleApp; reason: string }[] = [];
@@ -351,8 +351,8 @@ async function main(): Promise<void> {
     const env = {
       ...process.env,
       PORT: String(app.port),
-      RAINDROP_LOCAL_DEBUGGER: process.env.RAINDROP_LOCAL_DEBUGGER!,
-      RAINDROP_ENDPOINT: process.env.RAINDROP_ENDPOINT!,
+      AGENTTRACE_LOCAL_DEBUGGER: process.env.AGENTTRACE_LOCAL_DEBUGGER!,
+      AGENTTRACE_ENDPOINT: process.env.AGENTTRACE_ENDPOINT!,
     };
 
     const proc = spawn({

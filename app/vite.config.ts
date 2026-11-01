@@ -3,24 +3,24 @@ import { readFileSync } from "node:fs";
 import path from "path";
 import { defineConfig } from "vite";
 
-const uiPort = Number(process.env.RAINDROP_WORKSHOP_UI_PORT ?? "5900");
+const uiPort = Number(process.env.AGENTTRACE_WORKSHOP_UI_PORT ?? "5900");
 const backendPort = Number(
-  process.env.RAINDROP_WORKSHOP_BACKEND_PORT ??
-    process.env.RAINDROP_WORKSHOP_PORT ??
+  process.env.AGENTTRACE_WORKSHOP_BACKEND_PORT ??
+    process.env.AGENTTRACE_WORKSHOP_PORT ??
     "5899",
 );
 const backendUrl = `http://localhost:${backendPort}`;
 const rootPackage = JSON.parse(
   readFileSync(path.resolve(__dirname, "../package.json"), "utf8"),
 ) as { version?: string };
-const raindropVersion = process.env.RAINDROP_VERSION || rootPackage.version || "dev";
-const raindropAssetsBaseUrl = (process.env.RAINDROP_ASSETS_BASE_URL || "https://raindrop.sh").replace(/\/+$/, "");
+const raindropVersion = process.env.AGENTTRACE_VERSION || rootPackage.version || "dev";
+const raindropAssetsBaseUrl = (process.env.AGENTTRACE_ASSETS_BASE_URL || "https://raindrop.sh").replace(/\/+$/, "");
 
 export default defineConfig({
   plugins: [react()],
   define: {
-    __RAINDROP_VERSION__: JSON.stringify(raindropVersion),
-    __RAINDROP_ASSETS_BASE_URL__: JSON.stringify(raindropAssetsBaseUrl),
+    __AGENTTRACE_VERSION__: JSON.stringify(raindropVersion),
+    __AGENTTRACE_ASSETS_BASE_URL__: JSON.stringify(raindropAssetsBaseUrl),
   },
   resolve: {
     alias: {

@@ -19,7 +19,7 @@ const FIXTURE_SPAN_COUNT = 6;
 async function seedFixtures(workshopUrl: string) {
   const seed = spawnSync("bun", ["scripts/seed-traces.ts"], {
     cwd: REPO_ROOT_PATH,
-    env: { ...process.env, RAINDROP_WORKSHOP_URL: workshopUrl },
+    env: { ...process.env, AGENTTRACE_WORKSHOP_URL: workshopUrl },
     stdio: "inherit",
   });
   expect(seed.status, "seed-traces.ts failed").toBe(0);

@@ -7,7 +7,7 @@ import type { RequestHandler } from "express";
  * may have other tabs open. Non-browser callers (MCP child, curl) send no
  * Origin header and are allowed through unchanged so existing tooling keeps
  * working; browser callers must come from a loopback origin (or one explicitly
- * configured via RAINDROP_WORKSHOP_ALLOWED_ORIGINS).
+ * configured via AGENTTRACE_WORKSHOP_ALLOWED_ORIGINS).
  */
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 

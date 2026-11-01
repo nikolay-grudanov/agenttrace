@@ -156,8 +156,8 @@ OPTIONS
     --email EMAIL Submit a claim without an interactive email prompt.
 
 ENVIRONMENT
-    RAINDROP_DRIP_ITEMS_URL Override the item availability endpoint for testing.
-    RAINDROP_DRIP_CLAIM_URL Override the claim endpoint for testing.
+    AGENTTRACE_DRIP_ITEMS_URL Override the item availability endpoint for testing.
+    AGENTTRACE_DRIP_CLAIM_URL Override the claim endpoint for testing.
 `);
 }
 
@@ -303,7 +303,7 @@ function mergeDripItems(remoteItems: unknown): DripItem[] {
 }
 
 async function loadDripItems(): Promise<DripItem[]> {
-  const url = process.env.RAINDROP_DRIP_ITEMS_URL ?? DEFAULT_DRIP_ITEMS_URL;
+  const url = process.env.AGENTTRACE_DRIP_ITEMS_URL ?? DEFAULT_DRIP_ITEMS_URL;
 
   try {
     const response = await fetch(url, {
@@ -326,7 +326,7 @@ async function submitDripClaim(input: {
   item: DripItemId;
   starMethod: "api" | "browser";
 }): Promise<DripClaimResult> {
-  const url = process.env.RAINDROP_DRIP_CLAIM_URL ?? DEFAULT_DRIP_CLAIM_URL;
+  const url = process.env.AGENTTRACE_DRIP_CLAIM_URL ?? DEFAULT_DRIP_CLAIM_URL;
   let response: Response;
 
   try {

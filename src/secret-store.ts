@@ -2,12 +2,12 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-export const RAINDROP_SECRET_STORE_PATH_ENV = "RAINDROP_WORKSHOP_SECRET_STORE_PATH";
+export const AGENTTRACE_SECRET_STORE_PATH_ENV = "AGENTTRACE_WORKSHOP_SECRET_STORE_PATH";
 
 export const SECRET_DEFS = {
   openai: {
     label: "OpenAI",
-    envVars: ["OPENAI_API_KEY", "RAINDROP_OPENAI_API_KEY"],
+    envVars: ["OPENAI_API_KEY", "AGENTTRACE_OPENAI_API_KEY"],
   },
 } as const;
 
@@ -29,7 +29,7 @@ export function parseSecretKey(value: string): SecretKey | null {
 }
 
 export function secretStorePath(): string {
-  const explicit = process.env[RAINDROP_SECRET_STORE_PATH_ENV]?.trim();
+  const explicit = process.env[AGENTTRACE_SECRET_STORE_PATH_ENV]?.trim();
   return explicit || path.join(os.homedir(), ".raindrop", "secrets.json");
 }
 
