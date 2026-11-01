@@ -63,6 +63,20 @@ export default defineConfig(
     },
   },
   {
+    // Repo-local OpenCode plugins (ESM, run under the OpenCode runtime —
+    // Bun). They use Node/Bun globals, so they need them declared; without
+    // this block ESLint applies the bare `eslint.configs.recommended` rules
+    // and flags `process`/`console` as undefined no-undef errors.
+    files: [".opencode/plugins/**/*.js"],
+    languageOptions: {
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+        Bun: "readonly",
+      },
+    },
+  },
+  {
     files: ["web/**/*.mjs"],
     languageOptions: {
       globals: {
